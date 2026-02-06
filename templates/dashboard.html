@@ -1,0 +1,19 @@
+<h2>Today Queue</h2>
+
+<form action="/join" method="POST">
+<input name="name" placeholder="Customer Name">
+<button>Join Queue</button>
+</form>
+
+<hr>
+
+<ul>
+{% for c in queue %}
+<li>
+#{{ c['queue_number'] }} - {{ c['name'] }} - {{ c['status'] }}
+<a href="/done/{{ c['queue_number'] }}">Done</a>
+</li>
+{% endfor %}
+</ul>
+
+<a href="/logout">Logout</a>

@@ -1,0 +1,13 @@
+<h2>Create Account</h2>
+
+{% if error %}
+<p style="color:red">{{error}}</p>
+{% endif %}
+
+<form method="POST">
+<input type="email" name="email" placeholder="Email" required>
+<input type="password" name="password" placeholder="Password (min 8 chars)" required>
+<button>Create Account</button>
+</form>
+
+<a href="/login">Already have account?</a>
