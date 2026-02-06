@@ -1,19 +1,157 @@
-<h2>Today Queue</h2>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Dashboard - RendezVousDZ Queue Management">
+    <title>Dashboard - RendezVousDZ</title>
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/dashboard.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/static/logo.png">
+</head>
+<body>
+    <div class="dashboard-wrapper">
+        <!-- Dashboard Header -->
+        <div class="dashboard-header">
+            <div class="dashboard-top">
+                <div class="dashboard-branding">
+                    <img src="/static/logo.png" alt="RendezVousDZ" class="dashboard-logo">
+                    <div class="dashboard-info">
+                        <h2>Today's Queue</h2>
+                        <p class="date" id="currentDate"></p>
+                    </div>
+                </div>
+                
+                <div class="dashboard-actions">
+                    <a href="/logout" class="btn btn-outline no-print">
+                        Logout
+                    </a>
+                </div>
+            </div>
+        </div>
 
-<form action="/join" method="POST">
-<input name="name" placeholder="Customer Name">
-<button>Join Queue</button>
-</form>
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div class="stat-label">Total in Queue</div>
+                    <div class="stat-value">{{ queue|length }}</div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div class="stat-label">Waiting</div>
+                    <div class="stat-value">{{ queue|selectattr('status', 'equalto', 'waiting')|list|length }}</div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div class="stat-label">Completed Today</div>
+                    <div class="stat-value">{{ queue|selectattr('status', 'equalto', 'done')|list|length }}</div>
+                    <div class="stat-change positive">+{{ queue|selectattr('status', 'equalto', 'done')|list|length }}</div>
+                </div>
+            </div>
+        </div>
 
-<hr>
+        <!-- Add Customer Form -->
+        <div class="queue-form-section">
+            <h3>Add Customer to Queue</h3>
+            <form action="/join" method="POST" class="queue-form">
+                <div class="form-field">
+                    <input 
+                        type="text" 
+                        name="name" 
+                        placeholder="Customer Name" 
+                        required
+                        autofocus
+                    >
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    Add to Queue
+                </button>
+            </form>
+        </div>
 
-<ul>
-{% for c in queue %}
-<li>
-#{{ c['queue_number'] }} - {{ c['name'] }} - {{ c['status'] }}
-<a href="/done/{{ c['queue_number'] }}">Done</a>
-</li>
-{% endfor %}
-</ul>
+        <!-- Queue List -->
+        <div class="queue-section">
+            <div class="queue-header">
+                <h3>Current Queue</h3>
+                <div class="queue-count">{{ queue|length }} Customer{{ 's' if queue|length != 1 else '' }}</div>
+            </div>
 
-<a href="/logout">Logout</a>
+            {% if queue|length > 0 %}
+            <div class="queue-list">
+                {% for c in queue %}
+                <div class="queue-item">
+                    <div class="queue-number">#{{ c['queue_number'] }}</div>
+                    
+                    <div class="queue-details">
+                        <div class="queue-name">{{ c['name'] }}</div>
+                        <div class="queue-meta">
+                            <span class="queue-status status-{{ c['status'] }}">
+                                {{ c['status']|title }}
+                            </span>
+                            {% if 'joined_at' in c.keys() %}
+                            <span class="queue-time" data-timestamp="{{ c['joined_at'] }}">
+                                {{ c['joined_at'] }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="queue-actions">
+                        {% if c['status'] != 'done' %}
+                        <a href="/done/{{ c['queue_number'] }}" class="btn btn-success">
+                            Mark Done
+                        </a>
+                        {% endif %}
+                        {% if c['status'] == 'waiting' %}
+                        <a href="/serve/{{ c['queue_number'] }}" class="btn btn-primary">
+                            Call Next
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">📋</div>
+                <h4>No customers in queue</h4>
+                <p>Add a customer above to get started</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Footer -->
+        <div class="dashboard-footer">
+            <p>RendezVousDZ &copy; 2026 - Professional Queue Management System</p>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/static/main.js"></script>
+    <script>
+        // Update current date
+        document.addEventListener('DOMContentLoaded', function() {
+            const dateElement = document.getElementById('currentDate');
+            if (dateElement) {
+                const options = { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                };
+                const today = new Date();
+                dateElement.textContent = today.toLocaleDateString('en-US', options);
+            }
+        });
+    </script>
+</body>
+</html>

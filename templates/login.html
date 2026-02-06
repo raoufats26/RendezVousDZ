@@ -1,13 +1,91 @@
-<h2>Login</h2>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Login to RendezVousDZ - Digital Queue Management System">
+    <title>Login - RendezVousDZ</title>
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/auth.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/static/logo.png">
+</head>
+<body>
+    <div class="auth-wrapper">
+        <div class="auth-container">
+            <div class="auth-card">
+                <!-- Header -->
+                <div class="auth-header">
+                    <img src="/static/logo.png" alt="RendezVousDZ Logo" class="auth-logo">
+                    <h2 class="auth-title">Welcome Back</h2>
+                    <p class="auth-subtitle">Sign in to manage your queue</p>
+                </div>
 
-{% if error %}
-<p style="color:red">{{error}}</p>
-{% endif %}
+                <!-- Error Message -->
+                {% if error %}
+                <div class="auth-error">
+                    {{ error }}
+                </div>
+                {% endif %}
 
-<form method="POST">
-<input type="email" name="email" placeholder="Email" required>
-<input type="password" name="password" placeholder="Password" required>
-<button>Login</button>
-</form>
+                <!-- Login Form -->
+                <form method="POST" class="auth-form" autocomplete="on">
+                    <div class="form-field">
+                        <label for="email">Email Address</label>
+                        <input 
+                            type="email" 
+                            id="email"
+                            name="email" 
+                            placeholder="you@example.com" 
+                            required
+                            autocomplete="email"
+                            autofocus
+                        >
+                    </div>
 
-<a href="/register">Create account</a>
+                    <div class="form-field">
+                        <label for="password">Password</label>
+                        <input 
+                            type="password" 
+                            id="password"
+                            name="password" 
+                            placeholder="Enter your password" 
+                            required
+                            autocomplete="current-password"
+                        >
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary w-full">
+                            Sign In
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Divider -->
+                <div class="auth-divider">
+                    <span>or</span>
+                </div>
+
+                <!-- Footer -->
+                <div class="auth-footer">
+                    <p>Don't have an account? <a href="/register">Create one now</a></p>
+                </div>
+            </div>
+
+            <!-- Back to Home -->
+            <div style="text-align: center; margin-top: 1.5rem;">
+                <a href="/" class="btn btn-ghost">
+                    ← Back to Home
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/static/main.js"></script>
+</body>
+</html>
