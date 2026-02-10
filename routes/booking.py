@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, session, flash
+from flask import Blueprint, render_template, request, redirect, session, url_for
 from database.db import (
     get_db, 
     get_business_by_user, 
@@ -8,10 +8,15 @@ from database.db import (
     count_entries_for_queue,
     is_queue_full,
     add_queue_entry,
-    get_queue_entries
+    get_queue_entries,
+    get_business_by_id
 )
 
 booking_bp = Blueprint("booking", __name__)
+
+# ========================================
+# OWNER ROUTES (PROTECTED)
+# ========================================
 
 @booking_bp.route("/dashboard")
 def dashboard():
@@ -103,7 +108,7 @@ def create_business_route():
 
 @booking_bp.route("/add-client", methods=["POST"])
 def add_client():
-    """Add a client to today's queue with limit enforcement"""
+    """Add a walk-in client to today's queue (OWNER ONLY)"""
     if "user_id" not in session:
         return redirect("/login")
     
@@ -167,7 +172,7 @@ def add_client():
 
 @booking_bp.route("/mark-done/<int:entry_id>")
 def mark_done(entry_id):
-    """Mark a queue entry as done"""
+    """Mark a queue entry as done (OWNER ONLY)"""
     if "user_id" not in session:
         return redirect("/login")
     
@@ -182,7 +187,7 @@ def mark_done(entry_id):
 
 @booking_bp.route("/mark-skipped/<int:entry_id>")
 def mark_skipped(entry_id):
-    """Mark a queue entry as skipped"""
+    """Mark a queue entry as skipped (OWNER ONLY)"""
     if "user_id" not in session:
         return redirect("/login")
     
@@ -194,3 +199,107 @@ def mark_skipped(entry_id):
     db.commit()
     
     return redirect("/dashboard")
+
+
+# ========================================
+# PUBLIC ROUTES (NO LOGIN REQUIRED)
+# ========================================
+
+@booking_bp.route("/b/<int:business_id>", methods=["GET", "POST"])
+def public_booking(business_id):
+    """Public booking page for customers (NO LOGIN REQUIRED)"""
+    
+    # Get business
+    business = get_business_by_id(business_id)
+    
+    # Business not found
+    if not business:
+        return render_template(
+            "public_booking.html",
+            error="Business not found",
+            business=None
+        )
+    
+    # Ensure today's queue exists
+    today_queue = get_today_queue(business_id)
+    
+    if not today_queue:
+        create_today_queue(business_id)
+        today_queue = get_today_queue(business_id)
+    
+    # Get current count
+    current_count = count_entries_for_queue(today_queue["id"])
+    max_clients = business["max_clients_per_day"]
+    queue_full = is_queue_full(today_queue["id"], max_clients)
+    
+    # Handle POST (customer submission)
+    if request.method == "POST":
+        client_name = request.form.get("client_name", "").strip()
+        client_phone = request.form.get("client_phone", "").strip()
+        
+        # Validate
+        if not client_name:
+            return render_template(
+                "public_booking.html",
+                business=business,
+                current_count=current_count,
+                max_clients=max_clients,
+                queue_full=queue_full,
+                error="Name is required"
+            )
+        
+        if not client_phone:
+            return render_template(
+                "public_booking.html",
+                business=business,
+                current_count=current_count,
+                max_clients=max_clients,
+                queue_full=queue_full,
+                error="Phone number is required"
+            )
+        
+        # Check if queue is full
+        if queue_full:
+            return render_template(
+                "public_booking.html",
+                business=business,
+                current_count=current_count,
+                max_clients=max_clients,
+                queue_full=True,
+                error=f"Sorry, the queue is full for today. Maximum {max_clients} clients per day."
+            )
+        
+        # Add to queue
+        success, message = add_queue_entry(today_queue["id"], client_name, client_phone)
+        
+        if not success:
+            return render_template(
+                "public_booking.html",
+                business=business,
+                current_count=current_count,
+                max_clients=max_clients,
+                queue_full=queue_full,
+                error=message
+            )
+        
+        # Success - show confirmation
+        new_position = current_count + 1
+        return render_template(
+            "public_booking.html",
+            business=business,
+            current_count=current_count + 1,
+            max_clients=max_clients,
+            queue_full=is_queue_full(today_queue["id"], max_clients),
+            success=True,
+            client_name=client_name,
+            position=new_position
+        )
+    
+    # Handle GET (show form)
+    return render_template(
+        "public_booking.html",
+        business=business,
+        current_count=current_count,
+        max_clients=max_clients,
+        queue_full=queue_full
+    )

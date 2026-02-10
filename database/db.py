@@ -18,6 +18,16 @@ def get_business_by_user(user_id):
     conn.close()
     return business
 
+def get_business_by_id(business_id):
+    """Get business by ID (for public booking page)"""
+    conn = get_db()
+    business = conn.execute(
+        "SELECT * FROM businesses WHERE id = ?",
+        (business_id,)
+    ).fetchone()
+    conn.close()
+    return business
+
 def create_business(user_id, name, category, city, max_clients):
     """Create a new business for a user"""
     conn = get_db()

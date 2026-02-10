@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Join Queue - RendezVousDZ">
+    <title>{% if business %}{{ business['name'] }} - Join Queue{% else %}Business Not Found{% endif %} - RendezVousDZ</title>
+    
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/auth.css">
+    <link rel="icon" type="image/png" href="/static/logo.png">
+</head>
+<body>
+    <div class="auth-wrapper">
+        <div class="auth-container">
+            <div class="auth-card">
+                {% if not business %}
+                <!-- Business Not Found -->
+                <div class="auth-header">
+                    <img src="/static/logo.png" alt="RendezVousDZ" class="auth-logo">
+                    <h1 class="auth-title">Business Not Found</h1>
+                    <p class="auth-subtitle">The business you're looking for doesn't exist.</p>
+                </div>
+                
+                {% elif success %}
+                <!-- Success Message -->
+                <div class="auth-header">
+                    <div style="font-size: 4rem; margin-bottom: var(--space-lg);">✅</div>
+                    <h1 class="auth-title">You're in the Queue!</h1>
+                    <p class="auth-subtitle">{{ business['name'] }}</p>
+                </div>
+                
+                <div style="background: rgba(16, 185, 129, 0.1); border: 2px solid var(--success); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-lg); text-align: center;">
+                    <p style="color: var(--success); font-weight: 700; font-size: 1.125rem; margin: 0;">
+                        Welcome, {{ client_name }}!
+                    </p>
+                    <p style="color: var(--mid-gray); margin-top: var(--space-sm); margin-bottom: 0;">
+                        Your position: <strong>#{{ position }}</strong>
+                    </p>
+                </div>
+                
+                <div style="text-align: center; color: var(--mid-gray);">
+                    <p>Please wait for your turn.</p>
+                    <p style="font-size: 0.875rem; margin-top: var(--space-md);">
+                        You can close this page now.
+                    </p>
+                </div>
+                
+                {% else %}
+                <!-- Booking Form -->
+                <div class="auth-header">
+                    <img src="/static/logo.png" alt="RendezVousDZ" class="auth-logo">
+                    <h1 class="auth-title">{{ business['name'] }}</h1>
+                    <p class="auth-subtitle">{{ business['category']|title }} • {{ business['city'] }}</p>
+                </div>
+
+                <!-- Queue Status -->
+                <div style="background: var(--light-gray); border-radius: var(--radius-lg); padding: var(--space-md); margin-bottom: var(--space-lg); text-align: center;">
+                    <p style="color: var(--mid-gray); font-size: 0.875rem; margin: 0;">
+                        Current Queue: <strong>{{ current_count }}/{{ max_clients }}</strong>
+                    </p>
+                </div>
+
+                {% if error %}
+                <div class="auth-error">
+                    {{ error }}
+                </div>
+                {% endif %}
+
+                {% if queue_full %}
+                <div style="background: rgba(239, 68, 68, 0.1); border: 2px solid var(--error); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-lg); text-align: center;">
+                    <p style="color: var(--error); font-weight: 700; font-size: 1.125rem; margin: 0;">
+                        ⚠️ Queue Full
+                    </p>
+                    <p style="color: var(--mid-gray); margin-top: var(--space-sm); margin-bottom: 0;">
+                        Sorry, we've reached our daily limit of {{ max_clients }} clients.
+                    </p>
+                    <p style="color: var(--mid-gray); font-size: 0.875rem; margin-top: var(--space-sm); margin-bottom: 0;">
+                        Please try again tomorrow.
+                    </p>
+                </div>
+                {% else %}
+                <form method="POST" class="auth-form">
+                    <div class="form-field">
+                        <label for="client_name">Your Name</label>
+                        <input 
+                            type="text" 
+                            id="client_name" 
+                            name="client_name" 
+                            placeholder="Full Name" 
+                            required
+                            autofocus
+                        >
+                    </div>
+
+                    <div class="form-field">
+                        <label for="client_phone">Phone Number</label>
+                        <input 
+                            type="tel" 
+                            id="client_phone" 
+                            name="client_phone" 
+                            placeholder="0555123456" 
+                            required
+                        >
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary w-full">
+                            Join Queue
+                        </button>
+                    </div>
+                </form>
+                {% endif %}
+
+                <div class="auth-footer">
+                    <p style="font-size: 0.75rem;">
+                        Powered by <a href="/">RendezVousDZ</a>
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/main.js"></script>
+</body>
+</html>
