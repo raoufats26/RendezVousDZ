@@ -34,6 +34,29 @@ CREATE TABLE IF NOT EXISTS businesses(
 )
 """)
 
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS daily_queues(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    business_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (business_id) REFERENCES businesses(id),
+    UNIQUE(business_id, date)
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS queue_entries(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    daily_queue_id INTEGER NOT NULL,
+    client_name TEXT NOT NULL,
+    client_phone TEXT,
+    status TEXT DEFAULT 'waiting',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (daily_queue_id) REFERENCES daily_queues(id)
+)
+""")
+
 # Add verified column if it doesn't exist
 try:
     cursor.execute("""

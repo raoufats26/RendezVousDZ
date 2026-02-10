@@ -26,6 +26,11 @@
                         <p style="font-size: 0.875rem; color: var(--mid-gray); margin-top: 0.25rem;">
                             {{ business['category']|title }} • {{ business['city'] }}
                         </p>
+                        {% if today_queue %}
+                        <p style="font-size: 0.75rem; color: var(--info); margin-top: 0.25rem; font-family: var(--font-mono);">
+                            Queue Date: {{ today_queue['date'] }}
+                        </p>
+                        {% endif %}
                     </div>
                 </div>
                 
@@ -37,46 +42,71 @@
             </div>
         </div>
 
+        <!-- Error Message -->
+        {% if error %}
+        <div class="error-message" style="margin-bottom: var(--space-lg);">
+            {{ error }}
+        </div>
+        {% endif %}
+
         <!-- Stats Grid -->
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-content">
-                    <div class="stat-label">Total in Queue</div>
-                    <div class="stat-value">{{ queue|length }}</div>
+                    <div class="stat-label">Current Queue</div>
+                    <div class="stat-value">{{ current_count }}</div>
                 </div>
             </div>
             
             <div class="stat-card">
                 <div class="stat-content">
-                    <div class="stat-label">Waiting</div>
-                    <div class="stat-value">{{ queue|selectattr('status', 'equalto', 'waiting')|list|length }}</div>
+                    <div class="stat-label">Daily Limit</div>
+                    <div class="stat-value">{{ max_clients }}</div>
                 </div>
             </div>
             
             <div class="stat-card">
                 <div class="stat-content">
-                    <div class="stat-label">Completed Today</div>
-                    <div class="stat-value">{{ queue|selectattr('status', 'equalto', 'done')|list|length }}</div>
-                    <div class="stat-change positive">+{{ queue|selectattr('status', 'equalto', 'done')|list|length }}</div>
+                    <div class="stat-label">Remaining Slots</div>
+                    <div class="stat-value" style="color: {% if queue_full %}var(--error){% else %}var(--success){% endif %};">
+                        {{ max_clients - current_count }}
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Add Customer Form -->
+        <!-- Queue Status Alert -->
+        {% if queue_full %}
+        <div style="background: rgba(239, 68, 68, 0.1); border: 2px solid var(--error); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-xl); text-align: center;">
+            <p style="color: var(--error); font-weight: 700; font-size: 1.125rem; margin: 0;">
+                ⚠️ Queue Full - Daily limit reached ({{ max_clients }}/{{ max_clients }})
+            </p>
+        </div>
+        {% endif %}
+
+        <!-- Add Client Form -->
         <div class="queue-form-section">
-            <h3>Add Customer to Queue</h3>
-            <form action="/join" method="POST" class="queue-form">
+            <h3>Add Client to Queue</h3>
+            <form action="/add-client" method="POST" class="queue-form">
                 <div class="form-field">
                     <input 
                         type="text" 
-                        name="name" 
-                        placeholder="Customer Name" 
+                        name="client_name" 
+                        placeholder="Client Name" 
                         required
-                        autofocus
+                        {% if queue_full %}disabled{% endif %}
                     >
                 </div>
-                <button type="submit" class="btn btn-primary">
-                    Add to Queue
+                <div class="form-field">
+                    <input 
+                        type="tel" 
+                        name="client_phone" 
+                        placeholder="Phone (Optional)"
+                        {% if queue_full %}disabled{% endif %}
+                    >
+                </div>
+                <button type="submit" class="btn btn-primary" {% if queue_full %}disabled{% endif %}>
+                    {% if queue_full %}Queue Full{% else %}Add to Queue{% endif %}
                 </button>
             </form>
         </div>
@@ -84,39 +114,37 @@
         <!-- Queue List -->
         <div class="queue-section">
             <div class="queue-header">
-                <h3>Current Queue</h3>
-                <div class="queue-count">{{ queue|length }} Customer{{ 's' if queue|length != 1 else '' }}</div>
+                <h3>Today's Queue</h3>
+                <div class="queue-count">{{ current_count }}/{{ max_clients }}</div>
             </div>
 
-            {% if queue|length > 0 %}
+            {% if queue_entries|length > 0 %}
             <div class="queue-list">
-                {% for c in queue %}
+                {% for entry in queue_entries %}
                 <div class="queue-item">
-                    <div class="queue-number">#{{ c['queue_number'] }}</div>
+                    <div class="queue-number">#{{ loop.index }}</div>
                     
                     <div class="queue-details">
-                        <div class="queue-name">{{ c['name'] }}</div>
+                        <div class="queue-name">{{ entry['client_name'] }}</div>
                         <div class="queue-meta">
-                            <span class="queue-status status-{{ c['status'] }}">
-                                {{ c['status']|title }}
+                            <span class="queue-status status-{{ entry['status'] }}">
+                                {{ entry['status']|title }}
                             </span>
-                            {% if 'joined_at' in c.keys() %}
-                            <span class="queue-time" data-timestamp="{{ c['joined_at'] }}">
-                                {{ c['joined_at'] }}
+                            {% if entry['client_phone'] %}
+                            <span class="queue-time">
+                                📞 {{ entry['client_phone'] }}
                             </span>
                             {% endif %}
                         </div>
                     </div>
                     
                     <div class="queue-actions">
-                        {% if c['status'] != 'done' %}
-                        <a href="/done/{{ c['queue_number'] }}" class="btn btn-success">
+                        {% if entry['status'] == 'waiting' %}
+                        <a href="/mark-done/{{ entry['id'] }}" class="btn btn-success">
                             Mark Done
                         </a>
-                        {% endif %}
-                        {% if c['status'] == 'waiting' %}
-                        <a href="/serve/{{ c['queue_number'] }}" class="btn btn-primary">
-                            Call Next
+                        <a href="/mark-skipped/{{ entry['id'] }}" class="btn btn-ghost">
+                            Skip
                         </a>
                         {% endif %}
                     </div>
@@ -126,8 +154,8 @@
             {% else %}
             <div class="empty-state">
                 <div class="empty-state-icon">📋</div>
-                <h4>No customers in queue</h4>
-                <p>Add a customer above to get started</p>
+                <h4>No clients in queue</h4>
+                <p>Add a client above to get started</p>
             </div>
             {% endif %}
         </div>
