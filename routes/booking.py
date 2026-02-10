@@ -2,7 +2,8 @@ from flask import Blueprint, render_template, request, redirect, session, url_fo
 from database.db import (
     get_db, 
     get_business_by_user, 
-    create_business, 
+    create_business,
+    update_business,
     get_today_queue, 
     create_today_queue,
     count_entries_for_queue,
@@ -119,6 +120,67 @@ def create_business_route():
     create_business(user_id, name, category, city, max_clients)
     
     return redirect("/dashboard")
+
+@booking_bp.route("/settings", methods=["GET", "POST"])
+def settings():
+    """Business settings page (OWNER ONLY)"""
+    if "user_id" not in session:
+        return redirect("/login")
+    
+    user_id = session["user_id"]
+    business = get_business_by_user(user_id)
+    
+    # No business = redirect to create
+    if not business:
+        return redirect("/dashboard")
+    
+    # Handle POST (update settings)
+    if request.method == "POST":
+        # Get form data
+        name = request.form.get("name", "").strip()
+        category = request.form.get("category", "").strip()
+        city = request.form.get("city", "").strip()
+        max_clients = request.form.get("max_clients", business["max_clients_per_day"])
+        
+        # Validate
+        error = None
+        if not name:
+            error = "Business name is required"
+        elif len(name) < 2:
+            error = "Business name must be at least 2 characters"
+        elif len(name) > 100:
+            error = "Business name is too long (maximum 100 characters)"
+        elif not category:
+            error = "Category is required"
+        elif not city:
+            error = "City is required"
+        elif len(city) < 2:
+            error = "City name must be at least 2 characters"
+        
+        # Validate max_clients
+        if not error:
+            try:
+                max_clients = int(max_clients)
+                if max_clients < 1:
+                    error = "Maximum clients must be at least 1"
+                elif max_clients > 100:
+                    error = "Maximum clients cannot exceed 100"
+            except (ValueError, TypeError):
+                error = "Invalid number for maximum clients"
+        
+        # If validation failed, show error
+        if error:
+            return render_template("settings.html", business=business, error=error)
+        
+        # Update business (safe - does not affect existing queues)
+        update_business(business["id"], name, category, city, max_clients)
+        
+        # Redirect with success message
+        return redirect("/settings?success=1")
+    
+    # Handle GET (show form)
+    success = request.args.get("success")
+    return render_template("settings.html", business=business, success=success)
 
 @booking_bp.route("/add-client", methods=["POST"])
 def add_client():

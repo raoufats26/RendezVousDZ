@@ -39,6 +39,20 @@ def create_business(user_id, name, category, city, max_clients):
     conn.commit()
     conn.close()
 
+def update_business(business_id, name, category, city, max_clients):
+    """
+    Update business settings.
+    Does NOT affect existing queue entries.
+    New max_clients applies to future queues only.
+    """
+    conn = get_db()
+    conn.execute(
+        "UPDATE businesses SET name = ?, category = ?, city = ?, max_clients_per_day = ? WHERE id = ?",
+        (name, category, city, max_clients, business_id)
+    )
+    conn.commit()
+    conn.close()
+
 def get_today_queue(business_id):
     """Get today's queue for a business. Returns None if doesn't exist."""
     today = date.today().isoformat()  # YYYY-MM-DD format
