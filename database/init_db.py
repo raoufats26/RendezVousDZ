@@ -22,9 +22,25 @@ CREATE TABLE IF NOT EXISTS email_tokens(
 """)
 
 cursor.execute("""
-ALTER TABLE users ADD COLUMN verified INTEGER DEFAULT 0
+CREATE TABLE IF NOT EXISTS businesses(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    city TEXT NOT NULL,
+    max_clients_per_day INTEGER DEFAULT 20,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+)
 """)
 
+# Add verified column if it doesn't exist
+try:
+    cursor.execute("""
+    ALTER TABLE users ADD COLUMN verified INTEGER DEFAULT 0
+    """)
+except:
+    pass  # Column already exists
 
 conn.commit()
 conn.close()

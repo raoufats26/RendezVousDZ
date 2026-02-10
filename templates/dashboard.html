@@ -21,8 +21,11 @@
                 <div class="dashboard-branding">
                     <img src="/static/logo.png" alt="RendezVousDZ" class="dashboard-logo">
                     <div class="dashboard-info">
-                        <h2>Today's Queue</h2>
+                        <h2>{{ business['name'] }}</h2>
                         <p class="date" id="currentDate"></p>
+                        <p style="font-size: 0.875rem; color: var(--mid-gray); margin-top: 0.25rem;">
+                            {{ business['category']|title }} • {{ business['city'] }}
+                        </p>
                     </div>
                 </div>
                 
