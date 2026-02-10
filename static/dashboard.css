@@ -30,7 +30,7 @@
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: var(--space-md);
+    gap: var(--space-lg);
 }
 
 .dashboard-branding {
@@ -48,6 +48,7 @@
     margin: 0;
     font-size: 1.75rem;
     color: var(--dark-blue);
+    line-height: 1.3;
 }
 
 .dashboard-info .date {
@@ -75,7 +76,7 @@
 .stat-card {
     background: var(--white);
     border-radius: var(--radius-lg);
-    padding: var(--space-lg);
+    padding: var(--space-xl);
     box-shadow: var(--shadow-md);
     position: relative;
     overflow: hidden;
@@ -114,7 +115,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin-bottom: var(--space-xs);
+    margin-bottom: var(--space-sm);
 }
 
 .stat-value {
@@ -122,6 +123,7 @@
     font-weight: 800;
     color: var(--dark-blue);
     font-family: var(--font-mono);
+    line-height: 1;
 }
 
 .stat-change {
@@ -163,13 +165,46 @@
 
 .queue-form {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr 1fr auto;
     gap: var(--space-md);
     align-items: end;
 }
 
+.queue-form .form-field {
+    margin-bottom: 0;
+}
+
 .queue-form input {
-    flex: 1;
+    width: 100%;
+    font-family: var(--font-display);
+    font-size: 1rem;
+    padding: 0.875rem 1.25rem;
+    border: 2px solid var(--light-gray);
+    border-radius: var(--radius-md);
+    background: var(--white);
+    color: var(--black);
+    transition: all var(--transition-base);
+    outline: none;
+}
+
+.queue-form input::placeholder {
+    color: var(--mid-gray);
+}
+
+.queue-form input:focus {
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.1);
+}
+
+.queue-form input:disabled {
+    background: var(--light-gray);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.queue-form button {
+    padding: 0.875rem 2rem;
+    white-space: nowrap;
 }
 
 /* Queue List Section */
@@ -184,7 +219,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--space-lg);
+    margin-bottom: var(--space-xl);
     padding-bottom: var(--space-md);
     border-bottom: 2px solid var(--light-gray);
 }
@@ -206,16 +241,17 @@
 .queue-count {
     background: linear-gradient(135deg, var(--primary-blue), var(--dark-blue));
     color: var(--white);
-    padding: 0.5rem 1rem;
+    padding: 0.625rem 1.125rem;
     border-radius: var(--radius-full);
     font-weight: 700;
     font-family: var(--font-mono);
+    font-size: 1rem;
 }
 
 .queue-list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-md);
+    gap: var(--space-lg);
 }
 
 .queue-item {
@@ -257,8 +293,8 @@
 .queue-number {
     background: linear-gradient(135deg, var(--primary-blue), var(--dark-blue));
     color: var(--white);
-    width: 60px;
-    height: 60px;
+    width: 64px;
+    height: 64px;
     border-radius: var(--radius-lg);
     display: flex;
     align-items: center;
@@ -267,24 +303,28 @@
     font-weight: 800;
     font-family: var(--font-mono);
     box-shadow: var(--shadow-md);
+    flex-shrink: 0;
 }
 
 .queue-details {
     display: flex;
     flex-direction: column;
-    gap: var(--space-xs);
+    gap: var(--space-sm);
+    min-width: 0;
 }
 
 .queue-name {
     font-size: 1.25rem;
     font-weight: 700;
     color: var(--dark-blue);
+    line-height: 1.3;
 }
 
 .queue-meta {
     display: flex;
     gap: var(--space-md);
     flex-wrap: wrap;
+    align-items: center;
 }
 
 .queue-status {
@@ -308,21 +348,21 @@
 }
 
 .queue-actions .btn {
-    min-width: 100px;
-    padding: 0.625rem 1.25rem;
+    min-width: 110px;
+    padding: 0.75rem 1.25rem;
     font-size: 0.875rem;
 }
 
 /* Empty State */
 .empty-state {
     text-align: center;
-    padding: var(--space-2xl);
+    padding: var(--space-2xl) var(--space-xl);
     color: var(--mid-gray);
 }
 
 .empty-state-icon {
     font-size: 4rem;
-    margin-bottom: var(--space-md);
+    margin-bottom: var(--space-lg);
     opacity: 0.5;
 }
 
@@ -334,6 +374,7 @@
 
 .empty-state p {
     margin: 0;
+    font-size: 1rem;
 }
 
 /* Footer */
@@ -373,22 +414,62 @@
     margin-right: 0.25rem;
 }
 
+.status-skipped {
+    color: var(--mid-gray);
+}
+
+.status-skipped::before {
+    content: '⏭️';
+    margin-right: 0.25rem;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
+    .queue-form {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .queue-form button {
+        grid-column: 1 / -1;
+    }
+    
     .queue-item {
         grid-template-columns: auto 1fr;
+        gap: var(--space-md);
     }
     
     .queue-actions {
         grid-column: 1 / -1;
-        justify-content: flex-end;
+        justify-content: flex-start;
+        margin-top: var(--space-sm);
     }
 }
 
 @media (max-width: 768px) {
+    .dashboard-wrapper {
+        padding: var(--space-md);
+    }
+    
+    .dashboard-header {
+        padding: var(--space-lg);
+    }
+    
     .dashboard-top {
         flex-direction: column;
         align-items: flex-start;
+        gap: var(--space-md);
+    }
+    
+    .dashboard-branding {
+        width: 100%;
+    }
+    
+    .dashboard-logo {
+        max-width: 120px;
+    }
+    
+    .dashboard-info h2 {
+        font-size: 1.5rem;
     }
     
     .dashboard-actions {
@@ -398,19 +479,42 @@
     
     .dashboard-actions .btn {
         width: 100%;
+        justify-content: center;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-md);
+    }
+    
+    .queue-form-section,
+    .queue-section {
+        padding: var(--space-lg);
     }
     
     .queue-form {
         grid-template-columns: 1fr;
     }
     
+    .queue-form button {
+        grid-column: 1;
+    }
+    
     .queue-item {
         grid-template-columns: 1fr;
         text-align: center;
+        padding: var(--space-md);
     }
     
     .queue-number {
         margin: 0 auto;
+        width: 56px;
+        height: 56px;
+        font-size: 1.25rem;
+    }
+    
+    .queue-details {
+        align-items: center;
     }
     
     .queue-meta {
@@ -424,5 +528,28 @@
     
     .queue-actions .btn {
         flex: 1;
+        min-width: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .dashboard-wrapper {
+        padding: var(--space-sm);
+    }
+    
+    .stat-card {
+        padding: var(--space-lg);
+    }
+    
+    .stat-value {
+        font-size: 2rem;
+    }
+    
+    .queue-actions {
+        flex-direction: column;
+    }
+    
+    .queue-actions .btn {
+        width: 100%;
     }
 }

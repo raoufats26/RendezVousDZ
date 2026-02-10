@@ -9,7 +9,9 @@ from database.db import (
     is_queue_full,
     add_queue_entry,
     get_queue_entries,
-    get_business_by_id
+    get_business_by_id,
+    validate_client_name,
+    validate_phone_number
 )
 
 booking_bp = Blueprint("booking", __name__)
@@ -86,22 +88,34 @@ def create_business_route():
     error = None
     if not name:
         error = "Business name is required"
+    elif len(name) < 2:
+        error = "Business name must be at least 2 characters"
+    elif len(name) > 100:
+        error = "Business name is too long (maximum 100 characters)"
     elif not category:
         error = "Category is required"
     elif not city:
         error = "City is required"
+    elif len(city) < 2:
+        error = "City name must be at least 2 characters"
+    
+    if error:
+        return render_template("create_business.html", error=error)
+    
+    # Validate and sanitize max_clients
+    try:
+        max_clients = int(max_clients)
+        if max_clients < 1:
+            error = "Maximum clients must be at least 1"
+        elif max_clients > 100:
+            error = "Maximum clients cannot exceed 100"
+    except (ValueError, TypeError):
+        error = "Invalid number for maximum clients"
     
     if error:
         return render_template("create_business.html", error=error)
     
     # Create business
-    try:
-        max_clients = int(max_clients)
-        if max_clients < 1 or max_clients > 100:
-            max_clients = 20
-    except:
-        max_clients = 20
-    
     create_business(user_id, name, category, city, max_clients)
     
     return redirect("/dashboard")
@@ -124,49 +138,45 @@ def add_client():
     if not today_queue:
         return redirect("/dashboard")
     
+    # Helper function to render dashboard with error
+    def render_dashboard_with_error(error_msg):
+        return render_template(
+            "dashboard.html",
+            business=business,
+            today_queue=today_queue,
+            queue_entries=get_queue_entries(today_queue["id"]),
+            current_count=count_entries_for_queue(today_queue["id"]),
+            max_clients=business["max_clients_per_day"],
+            queue_full=is_queue_full(today_queue["id"], business["max_clients_per_day"]),
+            error=error_msg
+        )
+    
     # Get form data
     client_name = request.form.get("client_name", "").strip()
     client_phone = request.form.get("client_phone", "").strip()
     
-    if not client_name:
-        return render_template(
-            "dashboard.html",
-            business=business,
-            today_queue=today_queue,
-            queue_entries=get_queue_entries(today_queue["id"]),
-            current_count=count_entries_for_queue(today_queue["id"]),
-            max_clients=business["max_clients_per_day"],
-            queue_full=is_queue_full(today_queue["id"], business["max_clients_per_day"]),
-            error="Client name is required"
-        )
+    # Validate name
+    name_valid, name_error = validate_client_name(client_name)
+    if not name_valid:
+        return render_dashboard_with_error(name_error)
+    
+    # Validate phone (optional for walk-ins, but if provided must be valid)
+    if client_phone:
+        phone_valid, phone_error = validate_phone_number(client_phone)
+        if not phone_valid:
+            return render_dashboard_with_error(phone_error)
     
     # CHECK LIMIT BEFORE ADDING
     if is_queue_full(today_queue["id"], business["max_clients_per_day"]):
-        return render_template(
-            "dashboard.html",
-            business=business,
-            today_queue=today_queue,
-            queue_entries=get_queue_entries(today_queue["id"]),
-            current_count=count_entries_for_queue(today_queue["id"]),
-            max_clients=business["max_clients_per_day"],
-            queue_full=True,
-            error=f"Queue is full. Maximum {business['max_clients_per_day']} clients per day."
+        return render_dashboard_with_error(
+            f"Queue is full. Maximum {business['max_clients_per_day']} clients per day."
         )
     
-    # Add client to queue
-    success, message = add_queue_entry(today_queue["id"], client_name, client_phone)
+    # Add client to queue (validation happens inside add_queue_entry)
+    success, message = add_queue_entry(today_queue["id"], client_name, client_phone if client_phone else None)
     
     if not success:
-        return render_template(
-            "dashboard.html",
-            business=business,
-            today_queue=today_queue,
-            queue_entries=get_queue_entries(today_queue["id"]),
-            current_count=count_entries_for_queue(today_queue["id"]),
-            max_clients=business["max_clients_per_day"],
-            queue_full=is_queue_full(today_queue["id"], business["max_clients_per_day"]),
-            error=message
-        )
+        return render_dashboard_with_error(message)
     
     return redirect("/dashboard")
 
@@ -176,12 +186,36 @@ def mark_done(entry_id):
     if "user_id" not in session:
         return redirect("/login")
     
+    # Verify the entry belongs to this user's business
+    user_id = session["user_id"]
+    business = get_business_by_user(user_id)
+    
+    if not business:
+        return redirect("/dashboard")
+    
     db = get_db()
+    
+    # Check entry exists and belongs to this business
+    entry = db.execute(
+        """
+        SELECT qe.* FROM queue_entries qe
+        JOIN daily_queues dq ON qe.daily_queue_id = dq.id
+        WHERE qe.id = ? AND dq.business_id = ?
+        """,
+        (entry_id, business["id"])
+    ).fetchone()
+    
+    if not entry:
+        db.close()
+        return redirect("/dashboard")
+    
+    # Update status
     db.execute(
         "UPDATE queue_entries SET status = 'done' WHERE id = ?",
         (entry_id,)
     )
     db.commit()
+    db.close()
     
     return redirect("/dashboard")
 
@@ -191,12 +225,36 @@ def mark_skipped(entry_id):
     if "user_id" not in session:
         return redirect("/login")
     
+    # Verify the entry belongs to this user's business
+    user_id = session["user_id"]
+    business = get_business_by_user(user_id)
+    
+    if not business:
+        return redirect("/dashboard")
+    
     db = get_db()
+    
+    # Check entry exists and belongs to this business
+    entry = db.execute(
+        """
+        SELECT qe.* FROM queue_entries qe
+        JOIN daily_queues dq ON qe.daily_queue_id = dq.id
+        WHERE qe.id = ? AND dq.business_id = ?
+        """,
+        (entry_id, business["id"])
+    ).fetchone()
+    
+    if not entry:
+        db.close()
+        return redirect("/dashboard")
+    
+    # Update status
     db.execute(
         "UPDATE queue_entries SET status = 'skipped' WHERE id = ?",
         (entry_id,)
     )
     db.commit()
+    db.close()
     
     return redirect("/dashboard")
 
@@ -209,8 +267,23 @@ def mark_skipped(entry_id):
 def public_booking(business_id):
     """Public booking page for customers (NO LOGIN REQUIRED)"""
     
+    # Validate business_id is positive
+    if business_id <= 0:
+        return render_template(
+            "public_booking.html",
+            error="Invalid business ID",
+            business=None
+        )
+    
     # Get business
-    business = get_business_by_id(business_id)
+    try:
+        business = get_business_by_id(business_id)
+    except Exception as e:
+        return render_template(
+            "public_booking.html",
+            error="An error occurred. Please try again later.",
+            business=None
+        )
     
     # Business not found
     if not business:
@@ -221,11 +294,21 @@ def public_booking(business_id):
         )
     
     # Ensure today's queue exists
-    today_queue = get_today_queue(business_id)
-    
-    if not today_queue:
-        create_today_queue(business_id)
+    try:
         today_queue = get_today_queue(business_id)
+        
+        if not today_queue:
+            create_today_queue(business_id)
+            today_queue = get_today_queue(business_id)
+    except Exception as e:
+        return render_template(
+            "public_booking.html",
+            business=business,
+            error="An error occurred. Please try again later.",
+            current_count=0,
+            max_clients=business["max_clients_per_day"],
+            queue_full=False
+        )
     
     # Get current count
     current_count = count_entries_for_queue(today_queue["id"])
@@ -237,25 +320,28 @@ def public_booking(business_id):
         client_name = request.form.get("client_name", "").strip()
         client_phone = request.form.get("client_phone", "").strip()
         
-        # Validate
-        if not client_name:
+        # Validate name
+        name_valid, name_error = validate_client_name(client_name)
+        if not name_valid:
             return render_template(
                 "public_booking.html",
                 business=business,
                 current_count=current_count,
                 max_clients=max_clients,
                 queue_full=queue_full,
-                error="Name is required"
+                error=name_error
             )
         
-        if not client_phone:
+        # Validate phone (required for public bookings)
+        phone_valid, phone_error = validate_phone_number(client_phone)
+        if not phone_valid:
             return render_template(
                 "public_booking.html",
                 business=business,
                 current_count=current_count,
                 max_clients=max_clients,
                 queue_full=queue_full,
-                error="Phone number is required"
+                error=phone_error
             )
         
         # Check if queue is full
@@ -269,7 +355,7 @@ def public_booking(business_id):
                 error=f"Sorry, the queue is full for today. Maximum {max_clients} clients per day."
             )
         
-        # Add to queue
+        # Add to queue (validation and duplicate check happens inside)
         success, message = add_queue_entry(today_queue["id"], client_name, client_phone)
         
         if not success:

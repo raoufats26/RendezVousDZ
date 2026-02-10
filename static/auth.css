@@ -62,25 +62,66 @@
 .auth-form {
     display: flex;
     flex-direction: column;
-    gap: var(--space-md);
+    gap: var(--space-lg);
 }
 
 .form-field {
     position: relative;
+    margin-bottom: 0.5rem;
 }
 
 .form-field label {
     display: block;
     font-weight: 600;
     color: var(--dark-gray);
-    margin-bottom: var(--space-xs);
+    margin-bottom: 0.625rem;
     font-size: 0.875rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
 
-.form-field input {
+.form-field input,
+.form-field select {
     width: 100%;
+    font-family: var(--font-display);
+    font-size: 1rem;
+    padding: 1rem 1.25rem;
+    border: 2px solid var(--light-gray);
+    border-radius: var(--radius-md);
+    background: var(--white);
+    color: var(--black);
+    transition: all var(--transition-base);
+    outline: none;
+}
+
+.form-field input::placeholder,
+.form-field select::placeholder {
+    color: var(--mid-gray);
+}
+
+.form-field input:focus,
+.form-field select:focus {
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.1);
+}
+
+.form-field input:hover:not(:disabled),
+.form-field select:hover:not(:disabled) {
+    border-color: var(--primary-blue);
+}
+
+.form-field input:disabled,
+.form-field select:disabled {
+    background: var(--light-gray);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.form-field small {
+    display: block;
+    margin-top: 0.5rem;
+    color: var(--mid-gray);
+    font-size: 0.875rem;
 }
 
 .password-toggle {
@@ -104,7 +145,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
-    margin-top: var(--space-md);
+    margin-top: var(--space-sm);
 }
 
 .auth-divider {
@@ -132,7 +173,7 @@
 
 .auth-footer {
     text-align: center;
-    margin-top: var(--space-lg);
+    margin-top: var(--space-xl);
     padding-top: var(--space-lg);
     border-top: 2px solid var(--light-gray);
 }
@@ -140,6 +181,7 @@
 .auth-footer p {
     color: var(--mid-gray);
     margin: 0;
+    font-size: 0.9375rem;
 }
 
 .auth-footer a {
@@ -156,20 +198,22 @@
 .auth-error {
     background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.05));
     color: var(--error);
-    padding: var(--space-md);
+    padding: 1rem 1.25rem;
     border-radius: var(--radius-md);
     border-left: 4px solid var(--error);
     font-weight: 500;
-    margin-bottom: var(--space-md);
+    margin-bottom: var(--space-lg);
     animation: slideIn 0.3s ease-out;
     display: flex;
     align-items: center;
     gap: var(--space-sm);
+    font-size: 0.9375rem;
 }
 
 .auth-error::before {
     content: '⚠';
     font-size: 1.25rem;
+    flex-shrink: 0;
 }
 
 /* Remember Me Checkbox */
@@ -293,6 +337,10 @@
 
 /* Responsive */
 @media (max-width: 768px) {
+    .auth-wrapper {
+        padding: var(--space-md);
+    }
+    
     .auth-card {
         padding: var(--space-xl);
     }
@@ -305,7 +353,27 @@
         font-size: 1.5rem;
     }
     
+    .form-field input,
+    .form-field select {
+        padding: 0.875rem 1rem;
+        font-size: 1rem;
+    }
+    
     .social-login {
         flex-direction: column;
+    }
+}
+
+@media (max-width: 480px) {
+    .auth-card {
+        padding: var(--space-lg);
+    }
+    
+    .auth-title {
+        font-size: 1.375rem;
+    }
+    
+    .auth-form {
+        gap: var(--space-md);
     }
 }

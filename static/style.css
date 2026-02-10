@@ -155,6 +155,7 @@ button, .btn {
     position: relative;
     overflow: hidden;
     letter-spacing: 0.01em;
+    line-height: 1.5;
 }
 
 button::before, .btn::before {
@@ -181,12 +182,12 @@ button:hover::before, .btn:hover::before {
     box-shadow: var(--shadow-md);
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: var(--shadow-xl), var(--shadow-glow);
 }
 
-.btn-primary:active {
+.btn-primary:active:not(:disabled) {
     transform: translateY(0);
 }
 
@@ -196,7 +197,7 @@ button:hover::before, .btn:hover::before {
     box-shadow: var(--shadow-md);
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: var(--shadow-xl), 0 0 20px rgba(255, 109, 0, 0.3);
 }
@@ -207,7 +208,7 @@ button:hover::before, .btn:hover::before {
     color: var(--primary-blue);
 }
 
-.btn-outline:hover {
+.btn-outline:hover:not(:disabled) {
     background: var(--primary-blue);
     color: var(--white);
     transform: translateY(-2px);
@@ -217,10 +218,10 @@ button:hover::before, .btn:hover::before {
 .btn-ghost {
     background: transparent;
     color: var(--mid-gray);
-    padding: 0.5rem 1rem;
+    padding: 0.625rem 1.25rem;
 }
 
-.btn-ghost:hover {
+.btn-ghost:hover:not(:disabled) {
     background: var(--light-gray);
     color: var(--dark-blue);
 }
@@ -230,7 +231,7 @@ button:hover::before, .btn:hover::before {
     color: var(--white);
 }
 
-.btn-danger:hover {
+.btn-danger:hover:not(:disabled) {
     background: #DC2626;
     transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
@@ -241,7 +242,7 @@ button:hover::before, .btn:hover::before {
     color: var(--white);
 }
 
-.btn-success:hover {
+.btn-success:hover:not(:disabled) {
     background: #059669;
     transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
@@ -251,6 +252,7 @@ button:disabled, .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
     transform: none !important;
+    box-shadow: none !important;
 }
 
 /* Input Fields */
@@ -258,6 +260,7 @@ input[type="text"],
 input[type="email"],
 input[type="password"],
 input[type="number"],
+input[type="tel"],
 textarea,
 select {
     font-family: var(--font-display);
@@ -282,13 +285,20 @@ textarea:focus,
 select:focus {
     border-color: var(--primary-blue);
     box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.1);
-    transform: translateY(-1px);
 }
 
-input:hover,
-textarea:hover,
-select:hover {
-    border-color: var(--primary-blue);
+input:hover:not(:disabled):not(:focus),
+textarea:hover:not(:disabled):not(:focus),
+select:hover:not(:disabled):not(:focus) {
+    border-color: #93c5fd;
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+    background: var(--light-gray);
+    cursor: not-allowed;
+    opacity: 0.6;
 }
 
 /* Cards */
@@ -348,11 +358,12 @@ form {
 .error-message {
     background: rgba(239, 68, 68, 0.1);
     color: var(--error);
-    padding: var(--space-sm) var(--space-md);
+    padding: 1rem 1.25rem;
     border-radius: var(--radius-md);
     border-left: 4px solid var(--error);
     font-weight: 500;
     animation: slideIn var(--transition-base);
+    font-size: 0.9375rem;
 }
 
 @keyframes slideIn {
@@ -540,6 +551,23 @@ hr {
     
     .card {
         padding: var(--space-lg);
+    }
+    
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="tel"],
+    textarea,
+    select {
+        padding: 0.875rem 1rem;
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    button, .btn {
+        padding: 0.75rem 1.25rem;
     }
 }
 
