@@ -55,7 +55,7 @@
         </div>
         {% endif %}
 
-        <!-- Stats Grid -->
+        <!-- Stats Grid - PHASE 15: Added Average Service Time -->
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-content">
@@ -76,6 +76,19 @@
                     <div class="stat-label">Remaining Slots</div>
                     <div class="stat-value" style="color: {% if queue_full %}var(--error){% else %}var(--success){% endif %};">
                         {{ max_clients - current_count }}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- PHASE 15: Average Service Time Card -->
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div class="stat-label">⏱️ Avg Service Time</div>
+                    <div class="stat-value" style="color: var(--info);">
+                        {{ avg_service_time }}<span style="font-size: 1rem; margin-left: 0.25rem;">min</span>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--mid-gray); margin-top: var(--space-xs);">
+                        Based on recent data
                     </div>
                 </div>
             </div>

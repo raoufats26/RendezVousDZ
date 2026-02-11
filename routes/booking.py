@@ -12,7 +12,12 @@ from database.db import (
     get_queue_entries,
     get_business_by_id,
     validate_client_name,
-    validate_phone_number
+    validate_phone_number,
+    # PHASE 15: New imports
+    mark_entry_completed,
+    get_average_service_time,
+    estimate_wait_time,
+    get_queue_position
 )
 
 booking_bp = Blueprint("booking", __name__)
@@ -100,6 +105,9 @@ def dashboard():
     
     # Check if queue is full
     queue_full = is_queue_full(today_queue["id"], max_clients)
+    
+    # PHASE 15: Get average service time for display
+    avg_service_time = get_average_service_time(business_id)
 
     return render_template(
         "dashboard.html", 
@@ -108,7 +116,8 @@ def dashboard():
         queue_entries=queue_entries,
         current_count=current_count,
         max_clients=max_clients,
-        queue_full=queue_full
+        queue_full=queue_full,
+        avg_service_time=avg_service_time  # PHASE 15
     )
 
 @booking_bp.route("/create-business", methods=["POST"])
@@ -238,44 +247,34 @@ def add_client():
     if not business:
         return redirect("/dashboard")
     
-    # Get today's queue
+    # Ensure today's queue exists
     today_queue = get_today_queue(business["id"])
-    
     if not today_queue:
-        return redirect("/dashboard")
-    
-    # Helper function to render dashboard with error
-    def render_dashboard_with_error(error_msg):
-        return render_template(
-            "dashboard.html",
-            business=business,
-            today_queue=today_queue,
-            queue_entries=get_queue_entries(today_queue["id"]),
-            current_count=count_entries_for_queue(today_queue["id"]),
-            max_clients=business["max_clients_per_day"],
-            queue_full=is_queue_full(today_queue["id"], business["max_clients_per_day"]),
-            error=error_msg
-        )
+        create_today_queue(business["id"])
+        today_queue = get_today_queue(business["id"])
     
     # Get form data
     client_name = request.form.get("client_name", "").strip()
     client_phone = request.form.get("client_phone", "").strip()
     
-    # Validate name
-    name_valid, name_error = validate_client_name(client_name)
-    if not name_valid:
-        return render_dashboard_with_error(name_error)
-    
-    # Validate phone (optional for walk-ins, but if provided must be valid)
-    if client_phone:
-        phone_valid, phone_error = validate_phone_number(client_phone)
-        if not phone_valid:
-            return render_dashboard_with_error(phone_error)
-    
-    # CHECK LIMIT BEFORE ADDING
-    if is_queue_full(today_queue["id"], business["max_clients_per_day"]):
-        return render_dashboard_with_error(
-            f"Queue is full. Maximum {business['max_clients_per_day']} clients per day."
+    # Helper function to render dashboard with error
+    def render_dashboard_with_error(error_msg):
+        queue_entries = get_queue_entries(today_queue["id"])
+        current_count = count_entries_for_queue(today_queue["id"])
+        max_clients = business["max_clients_per_day"]
+        queue_full = is_queue_full(today_queue["id"], max_clients)
+        avg_service_time = get_average_service_time(business["id"])  # PHASE 15
+        
+        return render_template(
+            "dashboard.html",
+            business=business,
+            today_queue=today_queue,
+            queue_entries=queue_entries,
+            current_count=current_count,
+            max_clients=max_clients,
+            queue_full=queue_full,
+            avg_service_time=avg_service_time,  # PHASE 15
+            error=error_msg
         )
     
     # Add client to queue (validation happens inside add_queue_entry)
@@ -292,7 +291,10 @@ def add_client():
 
 @booking_bp.route("/mark-done/<int:entry_id>")
 def mark_done(entry_id):
-    """Mark a queue entry as done (OWNER ONLY)"""
+    """
+    Mark a queue entry as completed (OWNER ONLY)
+    PHASE 15: Now records completion timestamp
+    """
     if "user_id" not in session:
         return redirect("/login")
     
@@ -319,15 +321,11 @@ def mark_done(entry_id):
         db.close()
         return redirect("/dashboard")
     
-    # Update status
-    db.execute(
-        "UPDATE queue_entries SET status = 'done' WHERE id = ?",
-        (entry_id,)
-    )
-    db.commit()
-    
     queue_id = entry["queue_id"]
     db.close()
+    
+    # PHASE 15: Use new function that records completion timestamp
+    mark_entry_completed(entry_id)
     
     # 🔥 EMIT REAL-TIME UPDATE
     print(f"🔥 [MARK-DONE] Emitting update for business {business['id']}")
@@ -494,8 +492,11 @@ def public_booking(business_id):
         print(f"🔥 [PUBLIC-BOOKING] Emitting update for business {business_id}")
         emit_queue_update(business_id, today_queue["id"])
         
-        # Success - show confirmation
+        # PHASE 15: Calculate position and estimated wait time
         new_position = current_count + 1
+        estimated_wait = estimate_wait_time(today_queue["id"], new_position, business_id)
+        
+        # Success - show confirmation with wait time
         return render_template(
             "public_booking.html",
             business=business,
@@ -504,7 +505,8 @@ def public_booking(business_id):
             queue_full=is_queue_full(today_queue["id"], max_clients),
             success=True,
             client_name=client_name,
-            position=new_position
+            position=new_position,
+            estimated_wait=estimated_wait  # PHASE 15
         )
     
     # Handle GET (show form)

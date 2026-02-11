@@ -23,7 +23,7 @@
                 </div>
                 
                 {% elif success %}
-                <!-- Success Message -->
+                <!-- Success Message with PHASE 15: Estimated Wait Time -->
                 <div class="auth-header">
                     <div style="font-size: 4rem; margin-bottom: var(--space-lg);">✅</div>
                     <h1 class="auth-title">You're in the Queue!</h1>
@@ -38,6 +38,34 @@
                         Your position: <strong>#{{ position }}</strong>
                     </p>
                 </div>
+                
+                <!-- PHASE 15: Estimated Wait Time Display -->
+                {% if estimated_wait is defined and estimated_wait > 0 %}
+                <div style="background: rgba(30, 136, 229, 0.1); border: 2px solid var(--info); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-lg); text-align: center;">
+                    <p style="color: var(--info); font-weight: 700; font-size: 1.25rem; margin: 0;">
+                        ⏱️ Estimated Wait Time
+                    </p>
+                    <p style="color: var(--dark-blue); font-size: 2rem; font-weight: 800; margin: var(--space-sm) 0; font-family: var(--font-mono);">
+                        {% if estimated_wait >= 60 %}
+                            {{ (estimated_wait // 60)|int }}h {{ (estimated_wait % 60)|int }}min
+                        {% else %}
+                            {{ estimated_wait }} min
+                        {% endif %}
+                    </p>
+                    <p style="color: var(--mid-gray); font-size: 0.875rem; margin: 0;">
+                        Based on {{ position - 1 }} {% if position - 1 == 1 %}person{% else %}people{% endif %} ahead of you
+                    </p>
+                </div>
+                {% elif estimated_wait is defined and estimated_wait == 0 %}
+                <div style="background: rgba(16, 185, 129, 0.1); border: 2px solid var(--success); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-lg); text-align: center;">
+                    <p style="color: var(--success); font-weight: 700; font-size: 1.25rem; margin: 0;">
+                        🎉 You're next!
+                    </p>
+                    <p style="color: var(--mid-gray); font-size: 0.875rem; margin-top: var(--space-sm); margin-bottom: 0;">
+                        You'll be served shortly
+                    </p>
+                </div>
+                {% endif %}
                 
                 <div style="text-align: center; color: var(--mid-gray);">
                     <p>Please wait for your turn.</p>

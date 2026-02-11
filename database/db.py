@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import date
+from datetime import date, datetime
 import re
 
 DB_NAME = "database/database.db"
@@ -205,3 +205,152 @@ def get_queue_entries(daily_queue_id):
     ).fetchall()
     conn.close()
     return entries
+
+# ========================================
+# PHASE 15: ESTIMATED WAIT TIME FUNCTIONS
+# ========================================
+
+def get_average_service_time(business_id, sample_size=10):
+    """
+    Calculate average service time in minutes based on recent completed entries.
+    
+    Args:
+        business_id: The business ID
+        sample_size: Number of recent completed entries to analyze (default: 10)
+    
+    Returns:
+        Average service time in minutes (integer), or 15 if insufficient data
+    """
+    conn = get_db()
+    
+    # Get last N completed entries with both created_at and completed_at
+    completed_entries = conn.execute("""
+        SELECT 
+            qe.created_at,
+            qe.completed_at
+        FROM queue_entries qe
+        JOIN daily_queues dq ON qe.daily_queue_id = dq.id
+        WHERE dq.business_id = ?
+            AND qe.status = 'completed'
+            AND qe.completed_at IS NOT NULL
+        ORDER BY qe.completed_at DESC
+        LIMIT ?
+    """, (business_id, sample_size)).fetchall()
+    
+    conn.close()
+    
+    # If we don't have enough data, return default
+    if len(completed_entries) < 3:
+        return 15  # Default: 15 minutes
+    
+    # Calculate service durations
+    durations = []
+    for entry in completed_entries:
+        try:
+            created = datetime.fromisoformat(entry['created_at'])
+            completed = datetime.fromisoformat(entry['completed_at'])
+            duration_minutes = (completed - created).total_seconds() / 60
+            
+            # Sanity check: ignore unrealistic durations
+            if 1 <= duration_minutes <= 180:  # Between 1 minute and 3 hours
+                durations.append(duration_minutes)
+        except:
+            continue
+    
+    # If no valid durations found, return default
+    if not durations:
+        return 15
+    
+    # Calculate average and round to nearest minute
+    avg_duration = sum(durations) / len(durations)
+    return max(5, int(round(avg_duration)))  # Minimum 5 minutes
+
+
+def estimate_wait_time(daily_queue_id, position, business_id):
+    """
+    Estimate wait time for a client at a given position in the queue.
+    
+    Args:
+        daily_queue_id: The daily queue ID
+        position: Client's position in queue (1-based, so position 1 = first in line)
+        business_id: The business ID (for calculating avg service time)
+    
+    Returns:
+        Estimated wait time in minutes (integer)
+    """
+    # Get average service time
+    avg_service_time = get_average_service_time(business_id)
+    
+    # Calculate wait time
+    # Position 1 means "you're next" = 1 person ahead
+    # Position 2 means 2 people ahead, etc.
+    people_ahead = position - 1
+    
+    if people_ahead <= 0:
+        return 0  # You're being served or first in line
+    
+    estimated_minutes = people_ahead * avg_service_time
+    
+    return estimated_minutes
+
+
+def mark_entry_completed(entry_id):
+    """
+    Mark a queue entry as completed and record completion timestamp.
+    
+    Args:
+        entry_id: The queue entry ID
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    conn = get_db()
+    
+    try:
+        current_time = datetime.now().isoformat()
+        
+        conn.execute("""
+            UPDATE queue_entries 
+            SET status = 'completed', completed_at = ? 
+            WHERE id = ?
+        """, (current_time, entry_id))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        conn.close()
+        print(f"Error marking entry as completed: {e}")
+        return False
+
+
+def get_queue_position(daily_queue_id, entry_id):
+    """
+    Get the position of a specific entry in the queue (1-based).
+    Only counts 'waiting' entries.
+    
+    Args:
+        daily_queue_id: The daily queue ID
+        entry_id: The specific entry ID
+    
+    Returns:
+        Position number (1-based), or None if not found
+    """
+    conn = get_db()
+    
+    # Get all waiting entries ordered by creation time
+    waiting_entries = conn.execute("""
+        SELECT id 
+        FROM queue_entries 
+        WHERE daily_queue_id = ? AND status = 'waiting'
+        ORDER BY created_at ASC
+    """, (daily_queue_id,)).fetchall()
+    
+    conn.close()
+    
+    # Find position
+    for index, entry in enumerate(waiting_entries):
+        if entry['id'] == entry_id:
+            return index + 1  # 1-based position
+    
+    return None
