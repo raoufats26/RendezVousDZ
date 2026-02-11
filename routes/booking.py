@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, session, url_for
+from flask import Blueprint, render_template, request, redirect, session, url_for, current_app
 from database.db import (
     get_db, 
     get_business_by_user, 
@@ -16,6 +16,50 @@ from database.db import (
 )
 
 booking_bp = Blueprint("booking", __name__)
+
+# Helper function to emit queue updates
+def emit_queue_update(business_id, today_queue_id):
+    """Emit queue update event to all connected clients for this business"""
+    try:
+        # Get socketio from current_app
+        from flask import current_app
+        socketio = current_app.extensions.get('socketio')
+        
+        if not socketio:
+            print("❌ SocketIO not found in app extensions")
+            return
+        
+        print(f"🔥 SocketIO found, preparing to emit for business {business_id}")
+        
+        # Get updated queue data
+        queue_entries = get_queue_entries(today_queue_id)
+        current_count = count_entries_for_queue(today_queue_id)
+        
+        # Get business to check max_clients
+        business = get_business_by_id(business_id)
+        max_clients = business["max_clients_per_day"]
+        queue_full = is_queue_full(today_queue_id, max_clients)
+        
+        # Prepare data
+        emit_data = {
+            'business_id': business_id,
+            'current_count': current_count,
+            'max_clients': max_clients,
+            'queue_full': queue_full,
+            'queue_entries': [dict(entry) for entry in queue_entries]
+        }
+        
+        print(f"📤 Emitting to room: business_{business_id}")
+        print(f"📊 Data: count={current_count}, max={max_clients}, entries={len(queue_entries)}")
+        
+        # Emit to room specific to this business
+        socketio.emit('queue_updated', emit_data, room=f'business_{business_id}')
+        
+        print(f"✅ Successfully emitted queue update for business {business_id}")
+    except Exception as e:
+        print(f"❌ Error emitting queue update: {e}")
+        import traceback
+        traceback.print_exc()
 
 # ========================================
 # OWNER ROUTES (PROTECTED)
@@ -240,6 +284,10 @@ def add_client():
     if not success:
         return render_dashboard_with_error(message)
     
+    # 🔥 EMIT REAL-TIME UPDATE
+    print(f"🔥 [ADD-CLIENT] Emitting update for business {business['id']}")
+    emit_queue_update(business["id"], today_queue["id"])
+    
     return redirect("/dashboard")
 
 @booking_bp.route("/mark-done/<int:entry_id>")
@@ -260,7 +308,7 @@ def mark_done(entry_id):
     # Check entry exists and belongs to this business
     entry = db.execute(
         """
-        SELECT qe.* FROM queue_entries qe
+        SELECT qe.*, dq.id as queue_id FROM queue_entries qe
         JOIN daily_queues dq ON qe.daily_queue_id = dq.id
         WHERE qe.id = ? AND dq.business_id = ?
         """,
@@ -277,7 +325,13 @@ def mark_done(entry_id):
         (entry_id,)
     )
     db.commit()
+    
+    queue_id = entry["queue_id"]
     db.close()
+    
+    # 🔥 EMIT REAL-TIME UPDATE
+    print(f"🔥 [MARK-DONE] Emitting update for business {business['id']}")
+    emit_queue_update(business["id"], queue_id)
     
     return redirect("/dashboard")
 
@@ -299,7 +353,7 @@ def mark_skipped(entry_id):
     # Check entry exists and belongs to this business
     entry = db.execute(
         """
-        SELECT qe.* FROM queue_entries qe
+        SELECT qe.*, dq.id as queue_id FROM queue_entries qe
         JOIN daily_queues dq ON qe.daily_queue_id = dq.id
         WHERE qe.id = ? AND dq.business_id = ?
         """,
@@ -316,7 +370,13 @@ def mark_skipped(entry_id):
         (entry_id,)
     )
     db.commit()
+    
+    queue_id = entry["queue_id"]
     db.close()
+    
+    # 🔥 EMIT REAL-TIME UPDATE
+    print(f"🔥 [MARK-SKIPPED] Emitting update for business {business['id']}")
+    emit_queue_update(business["id"], queue_id)
     
     return redirect("/dashboard")
 
@@ -429,6 +489,10 @@ def public_booking(business_id):
                 queue_full=queue_full,
                 error=message
             )
+        
+        # 🔥 EMIT REAL-TIME UPDATE
+        print(f"🔥 [PUBLIC-BOOKING] Emitting update for business {business_id}")
+        emit_queue_update(business_id, today_queue["id"])
         
         # Success - show confirmation
         new_position = current_count + 1

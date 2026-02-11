@@ -1,4 +1,4 @@
-// RendezVousDZ - Main JavaScript File
+// RendezVousDZ - Main JavaScript File with Real-Time Support
 
 // Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', function() {
@@ -9,7 +9,258 @@ document.addEventListener('DOMContentLoaded', function() {
     initQueueUpdates();
     initNotifications();
     initThemeEffects();
+    initRealtimeQueue(); // 🔥 NEW: Real-time queue updates
 });
+
+// 🔥 REAL-TIME QUEUE UPDATES
+function initRealtimeQueue() {
+    console.log('🚀 initRealtimeQueue() called');
+    
+    // Check if we're on a page that needs real-time updates
+    const businessId = getBusinessIdFromPage();
+    console.log('🔍 Business ID detected:', businessId);
+    
+    if (!businessId) {
+        console.log('❌ No business ID found, skipping real-time');
+        return; // Not on a queue page
+    }
+    
+    console.log('📡 Loading Socket.IO library...');
+    // Load Socket.IO client library
+    const script = document.createElement('script');
+    script.src = 'https://cdn.socket.io/4.5.4/socket.io.min.js';
+    script.onload = function() {
+        console.log('✅ Socket.IO library loaded');
+        connectToRealtimeQueue(businessId);
+    };
+    script.onerror = function() {
+        console.error('❌ Failed to load Socket.IO library');
+    };
+    document.head.appendChild(script);
+}
+
+function getBusinessIdFromPage() {
+    // Dashboard page
+    const publicLinkBtn = document.querySelector('a[href^="/b/"]');
+    if (publicLinkBtn) {
+        const match = publicLinkBtn.getAttribute('href').match(/\/b\/(\d+)/);
+        return match ? match[1] : null;
+    }
+    
+    // Public booking page
+    const currentPath = window.location.pathname;
+    const match = currentPath.match(/\/b\/(\d+)/);
+    return match ? match[1] : null;
+}
+
+function connectToRealtimeQueue(businessId) {
+    console.log('🔌 Connecting to SocketIO for business:', businessId);
+    
+    // Connect to SocketIO server
+    const socket = io();
+    
+    // Join the business-specific room
+    socket.on('connect', function() {
+        console.log('🔥 Real-time connected - Socket ID:', socket.id);
+        console.log('📤 Emitting join event for business:', businessId);
+        socket.emit('join', { business_id: businessId });
+    });
+    
+    // Listen for queue updates
+    socket.on('queue_updated', function(data) {
+        console.log('📊 Queue updated EVENT RECEIVED:', data);
+        console.log('🔍 Comparing business IDs:', data.business_id, '==', businessId);
+        
+        if (data.business_id == businessId) {
+            console.log('✅ Business ID matches! Updating display...');
+            updateQueueDisplay(data);
+        } else {
+            console.log('❌ Business ID mismatch - ignoring update');
+        }
+    });
+    
+    socket.on('disconnect', function() {
+        console.log('❌ Real-time disconnected');
+    });
+    
+    socket.on('joined', function(data) {
+        console.log('✅ Successfully joined room:', data.room);
+    });
+}
+
+function updateQueueDisplay(data) {
+    console.log('🎨 updateQueueDisplay() called with data:', data);
+    
+    // Update stats
+    const currentCountEl = document.querySelector('.stat-value');
+    console.log('📊 Current count element:', currentCountEl);
+    if (currentCountEl && currentCountEl.textContent !== data.current_count.toString()) {
+        console.log('✏️ Updating current count from', currentCountEl.textContent, 'to', data.current_count);
+        currentCountEl.textContent = data.current_count;
+        animateElement(currentCountEl);
+    }
+    
+    // Update remaining slots
+    const remainingSlots = data.max_clients - data.current_count;
+    const statCards = document.querySelectorAll('.stat-card');
+    console.log('📊 Stat cards found:', statCards.length);
+    if (statCards.length >= 3) {
+        const remainingEl = statCards[2].querySelector('.stat-value');
+        if (remainingEl) {
+            console.log('✏️ Updating remaining slots to', remainingSlots);
+            remainingEl.textContent = remainingSlots;
+            remainingEl.style.color = data.queue_full ? 'var(--error)' : 'var(--success)';
+            animateElement(remainingEl);
+        }
+    }
+    
+    // Update queue count badge
+    const queueCountEl = document.querySelector('.queue-count');
+    console.log('🏷️ Queue count badge:', queueCountEl);
+    if (queueCountEl) {
+        console.log('✏️ Updating queue count badge to', `${data.current_count}/${data.max_clients}`);
+        queueCountEl.textContent = `${data.current_count}/${data.max_clients}`;
+        animateElement(queueCountEl);
+    }
+    
+    // Update queue full alert
+    const queueFullAlert = document.querySelector('[style*="rgba(239, 68, 68"]');
+    if (data.queue_full && !queueFullAlert && window.location.pathname.includes('/dashboard')) {
+        console.log('⚠️ Adding queue full alert');
+        const statsGrid = document.querySelector('.stats-grid');
+        if (statsGrid) {
+            const alert = document.createElement('div');
+            alert.style.cssText = 'background: rgba(239, 68, 68, 0.1); border: 2px solid var(--error); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-xl); text-align: center;';
+            alert.innerHTML = `<p style="color: var(--error); font-weight: 700; font-size: 1.125rem; margin: 0;">⚠️ Queue Full - Daily limit reached (${data.max_clients}/${data.max_clients})</p>`;
+            statsGrid.after(alert);
+        }
+    } else if (!data.queue_full && queueFullAlert) {
+        console.log('✅ Removing queue full alert');
+        queueFullAlert.remove();
+    }
+    
+    // Update queue list (DASHBOARD ONLY)
+    if (window.location.pathname.includes('/dashboard')) {
+        console.log('📋 Updating queue list with', data.queue_entries.length, 'entries');
+        updateQueueList(data.queue_entries);
+    }
+    
+    // Update public booking page counter
+    if (window.location.pathname.includes('/b/')) {
+        console.log('🌐 Updating public booking page');
+        const queueStatus = document.querySelector('[style*="background: var(--light-gray)"]');
+        if (queueStatus) {
+            const statusText = queueStatus.querySelector('p strong');
+            if (statusText) {
+                statusText.textContent = `${data.current_count}/${data.max_clients}`;
+            }
+        }
+        
+        // Disable form if queue is full
+        const submitBtn = document.querySelector('button[type="submit"]');
+        const inputs = document.querySelectorAll('input[name="client_name"], input[name="client_phone"]');
+        
+        if (data.queue_full) {
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Queue Full';
+            }
+            inputs.forEach(input => input.disabled = true);
+        } else {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Join Queue';
+            }
+            inputs.forEach(input => input.disabled = false);
+        }
+    }
+    
+    console.log('✅ updateQueueDisplay() completed');
+}
+
+function updateQueueList(entries) {
+    const queueList = document.querySelector('.queue-list');
+    const emptyState = document.querySelector('.empty-state');
+    
+    if (!entries || entries.length === 0) {
+        // Show empty state
+        if (queueList) {
+            queueList.style.display = 'none';
+        }
+        if (!emptyState) {
+            const queueSection = document.querySelector('.queue-section');
+            if (queueSection) {
+                const empty = document.createElement('div');
+                empty.className = 'empty-state';
+                empty.innerHTML = `
+                    <div class="empty-state-icon">📋</div>
+                    <h4>No clients in queue</h4>
+                    <p>Add a client above to get started</p>
+                `;
+                queueSection.appendChild(empty);
+            }
+        }
+        return;
+    }
+    
+    // Hide empty state
+    if (emptyState) {
+        emptyState.style.display = 'none';
+    }
+    
+    if (!queueList) {
+        return;
+    }
+    
+    queueList.style.display = 'block';
+    
+    // Build new queue HTML
+    let queueHTML = '';
+    entries.forEach((entry, index) => {
+        queueHTML += `
+            <div class="queue-item" style="animation: slideInLeft 0.4s ease-out both;">
+                <div class="queue-number">#${index + 1}</div>
+                
+                <div class="queue-details">
+                    <div class="queue-name">${escapeHtml(entry.client_name)}</div>
+                    <div class="queue-meta">
+                        <span class="queue-status status-${entry.status}">
+                            ${capitalizeFirst(entry.status)}
+                        </span>
+                        ${entry.client_phone ? `<span class="queue-time">📞 ${escapeHtml(entry.client_phone)}</span>` : ''}
+                    </div>
+                </div>
+                
+                <div class="queue-actions">
+                    ${entry.status === 'waiting' ? `
+                        <a href="/mark-done/${entry.id}" class="btn btn-success">Mark Done</a>
+                        <a href="/mark-skipped/${entry.id}" class="btn btn-ghost">Skip</a>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    });
+    
+    queueList.innerHTML = queueHTML;
+    animateElement(queueList);
+}
+
+function animateElement(element) {
+    element.style.animation = 'none';
+    setTimeout(() => {
+        element.style.animation = 'pulse 0.3s ease-in-out';
+    }, 10);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function capitalizeFirst(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
 
 // Animation Initialization
 function initAnimations() {
@@ -182,18 +433,6 @@ function initQueueUpdates() {
             setInterval(() => updateTimestamp(timeElement), 60000); // Update every minute
         }
     });
-    
-    // Auto-refresh queue every 30 seconds
-    const queueList = document.querySelector('.queue-list');
-    if (queueList && window.location.pathname.includes('dashboard')) {
-        setInterval(() => {
-            // Add subtle pulse to indicate update
-            queueList.style.opacity = '0.7';
-            setTimeout(() => {
-                queueList.style.opacity = '1';
-            }, 200);
-        }, 30000);
-    }
 }
 
 function updateTimestamp(element) {
@@ -353,6 +592,15 @@ style.textContent = `
         to {
             opacity: 0;
             transform: translateX(100%);
+        }
+    }
+    
+    @keyframes pulse {
+        0%, 100% {
+            transform: scale(1);
+        }
+        50% {
+            transform: scale(1.05);
         }
     }
 `;
