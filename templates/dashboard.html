@@ -11,6 +11,20 @@
     <link rel="icon" type="image/png" href="/static/logo.png">
 </head>
 <body>
+
+    <!-- ══ GLOBAL CONTROLS (theme + language) ══ -->
+    <div class="global-controls">
+        <div class="lang-picker">
+            <button onclick="switchLanguage('en')" data-lang="en" title="English">EN</button>
+            <button onclick="switchLanguage('fr')" data-lang="fr" title="Français">FR</button>
+            <button onclick="switchLanguage('ar')" data-lang="ar" title="العربية">AR</button>
+        </div>
+        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+            <span class="theme-icon theme-icon-light">☀️</span>
+            <span class="theme-icon theme-icon-dark">🌙</span>
+        </button>
+    </div>
+
     <div class="dashboard-wrapper">
         <!-- Dashboard Header -->
         <div class="dashboard-header">
@@ -35,7 +49,6 @@
                     <a href="/b/{{ business['id'] }}" target="_blank" class="btn btn-secondary no-print" style="background: linear-gradient(135deg, var(--primary-orange), var(--accent-orange));">
                         📋 Public Booking Link
                     </a>
-                    <!-- PHASE 16: Analytics button -->
                     <a href="/analytics" class="btn btn-outline no-print" style="border-color: #8B5CF6; color: #8B5CF6;">
                         📊 Analytics
                     </a>

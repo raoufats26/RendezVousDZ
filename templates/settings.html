@@ -11,16 +11,22 @@
     <link rel="icon" type="image/png" href="/static/logo.png">
 </head>
 <body>
+
+    <!-- ══ GLOBAL CONTROLS (theme + language) ══ -->
+    <div class="global-controls">
+        <div class="lang-picker">
+            <button onclick="switchLanguage('en')" data-lang="en" title="English">EN</button>
+            <button onclick="switchLanguage('fr')" data-lang="fr" title="Français">FR</button>
+            <button onclick="switchLanguage('ar')" data-lang="ar" title="العربية">AR</button>
+        </div>
+        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+            <span class="theme-icon theme-icon-light">☀️</span>
+            <span class="theme-icon theme-icon-dark">🌙</span>
+        </button>
+    </div>
+
     <div class="auth-wrapper">
         <div class="auth-container" style="max-width: 560px;">
-
-            <!-- Theme toggle -->
-            <div style="display:flex; justify-content:flex-end; margin-bottom: 0.75rem;">
-                <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
-                    <span class="theme-icon theme-icon-light">☀️</span>
-                    <span class="theme-icon theme-icon-dark">🌙</span>
-                </button>
-            </div>
 
             <div class="auth-card">
                 <div class="auth-header">
@@ -77,19 +83,6 @@
                                value="{{ business['max_clients_per_day'] }}"
                                min="1" max="500" required>
                         <small>Changes apply to future bookings only</small>
-                    </div>
-
-                    <!-- Language -->
-                    <div class="settings-section-label" style="margin-top: 0.5rem;">🌐 Language & Display</div>
-
-                    <div class="form-field">
-                        <label for="language">Interface Language</label>
-                        <select id="language" name="language">
-                            <option value="en" {% if business_lang == 'en' %}selected{% endif %}>🇬🇧 English</option>
-                            <option value="fr" {% if business_lang == 'fr' %}selected{% endif %}>🇫🇷 Français</option>
-                            <option value="ar" {% if business_lang == 'ar' %}selected{% endif %}>🇩🇿 العربية</option>
-                        </select>
-                        <small>Applies to the Digital Display screen</small>
                     </div>
 
                     <div class="form-actions">

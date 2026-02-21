@@ -16,8 +16,13 @@
     <div class="floating-shape shape-2"></div>
     <div class="floating-shape shape-3"></div>
 
-    <!-- Theme toggle — fixed top-right, doesn't touch layout -->
-    <div style="position:fixed; top:1rem; right:1rem; z-index:100;">
+    <!-- ══ GLOBAL CONTROLS (theme + language) ══ -->
+    <div class="global-controls">
+        <div class="lang-picker">
+            <button onclick="switchLanguage('en')" data-lang="en" title="English">EN</button>
+            <button onclick="switchLanguage('fr')" data-lang="fr" title="Français">FR</button>
+            <button onclick="switchLanguage('ar')" data-lang="ar" title="العربية">AR</button>
+        </div>
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
             <span class="theme-icon theme-icon-light">☀️</span>
             <span class="theme-icon theme-icon-dark">🌙</span>

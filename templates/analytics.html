@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,6 +11,19 @@
     <link rel="icon" type="image/png" href="/static/logo.png">
 </head>
 <body>
+
+<!-- ══ GLOBAL CONTROLS (theme + language) ══ -->
+<div class="global-controls">
+    <div class="lang-picker">
+        <button onclick="switchLanguage('en')" data-lang="en" title="English">EN</button>
+        <button onclick="switchLanguage('fr')" data-lang="fr" title="Français">FR</button>
+        <button onclick="switchLanguage('ar')" data-lang="ar" title="العربية">AR</button>
+    </div>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+        <span class="theme-icon theme-icon-light">☀️</span>
+        <span class="theme-icon theme-icon-dark">🌙</span>
+    </button>
+</div>
 
 <!-- ═══════════════════════════════════════════════════
      HEADER
@@ -31,11 +44,6 @@
         </div>
 
         <div class="an-header-right">
-            <!-- Dark Mode Toggle -->
-            <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode" title="Toggle dark mode">
-                <span class="theme-icon theme-icon-light">☀️</span>
-                <span class="theme-icon theme-icon-dark">🌙</span>
-            </button>
             <a href="/dashboard" class="btn btn-outline an-btn-dash">
                 ⚡ Live Queue
             </a>
@@ -181,6 +189,9 @@
 
 </div><!-- /an-wrapper -->
 
+<!-- main.js FIRST (gives us toggleTheme, switchLanguage) -->
+<script src="/static/main.js"></script>
+
 <!-- Chart.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 
@@ -207,31 +218,10 @@ const donutData = [
 ];
 
 // ═══════════════════════════════════════
-// DARK MODE
-// ═══════════════════════════════════════
-const html       = document.documentElement;
-const toggleBtn  = document.getElementById('themeToggle');
-const THEME_KEY  = 'rvdz_theme';
-
-function applyTheme(theme) {
-    html.setAttribute('data-theme', theme);
-    localStorage.setItem(THEME_KEY, theme);
-    // re-render charts with updated colors
-    if (window._chartsBuilt) rebuildCharts();
-}
-
-toggleBtn.addEventListener('click', () => {
-    const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    applyTheme(next);
-});
-
-// Restore saved theme
-const saved = localStorage.getItem(THEME_KEY);
-if (saved) html.setAttribute('data-theme', saved);
-
-// ═══════════════════════════════════════
 // COLOUR HELPERS  (respect dark mode)
 // ═══════════════════════════════════════
+const html = document.documentElement;
+
 function cssVar(name) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
@@ -461,7 +451,6 @@ function buildCharts() {
 }
 
 function rebuildCharts() {
-    // Short delay so CSS vars update first
     setTimeout(buildCharts, 50);
 }
 
