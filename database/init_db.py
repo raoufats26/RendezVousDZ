@@ -57,11 +57,21 @@ CREATE TABLE IF NOT EXISTS queue_entries(
 )
 """)
 
-# Add verified column if it doesn't exist
+# NEW: Password reset tokens table
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS password_reset_tokens(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+)
+""")
+
+# Safe migrations
 try:
-    cursor.execute("""
-    ALTER TABLE users ADD COLUMN verified INTEGER DEFAULT 0
-    """)
+    cursor.execute("ALTER TABLE users ADD COLUMN verified INTEGER DEFAULT 0")
 except:
     pass  # Column already exists
 

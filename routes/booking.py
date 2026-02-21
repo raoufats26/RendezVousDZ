@@ -22,123 +22,105 @@ from database.db import (
 
 booking_bp = Blueprint("booking", __name__)
 
-# Helper function to emit queue updates
-def emit_queue_update(business_id, today_queue_id):
-    """Emit queue update event to all connected clients for this business"""
+# ──────────────────────────────────────────────────────────────
+# HELPER: safe column access for sqlite3.Row
+# sqlite3.Row does NOT support .get() — use this instead
+# ──────────────────────────────────────────────────────────────
+def row_get(row, key, default=None):
     try:
-        # Get socketio from current_app
-        from flask import current_app
+        val = row[key]
+        return val if val is not None else default
+    except (IndexError, KeyError):
+        return default
+
+
+# ──────────────────────────────────────────────────────────────
+# HELPER: emit real-time queue update via SocketIO
+# ──────────────────────────────────────────────────────────────
+def emit_queue_update(business_id, today_queue_id):
+    try:
         socketio = current_app.extensions.get('socketio')
-        
         if not socketio:
             print("❌ SocketIO not found in app extensions")
             return
-        
-        print(f"🔥 SocketIO found, preparing to emit for business {business_id}")
-        
-        # Get updated queue data
+
         queue_entries = get_queue_entries(today_queue_id)
         current_count = count_entries_for_queue(today_queue_id)
-        
-        # Get business to check max_clients
-        business = get_business_by_id(business_id)
-        max_clients = business["max_clients_per_day"]
-        queue_full = is_queue_full(today_queue_id, max_clients)
-        
-        # Prepare data
+        business      = get_business_by_id(business_id)
+        max_clients   = business["max_clients_per_day"]
+        queue_full    = is_queue_full(today_queue_id, max_clients)
+
         emit_data = {
-            'business_id': business_id,
+            'business_id':   business_id,
             'current_count': current_count,
-            'max_clients': max_clients,
-            'queue_full': queue_full,
+            'max_clients':   max_clients,
+            'queue_full':    queue_full,
             'queue_entries': [dict(entry) for entry in queue_entries]
         }
-        
-        print(f"📤 Emitting to room: business_{business_id}")
-        print(f"📊 Data: count={current_count}, max={max_clients}, entries={len(queue_entries)}")
-        
-        # Emit to room specific to this business
+
         socketio.emit('queue_updated', emit_data, room=f'business_{business_id}')
-        
-        print(f"✅ Successfully emitted queue update for business {business_id}")
+        print(f"✅ Emitted queue update for business {business_id}")
     except Exception as e:
         print(f"❌ Error emitting queue update: {e}")
         import traceback
         traceback.print_exc()
 
-# ========================================
+
+# ════════════════════════════════════════════════════════════════
 # OWNER ROUTES (PROTECTED)
-# ========================================
+# ════════════════════════════════════════════════════════════════
 
 @booking_bp.route("/dashboard")
 def dashboard():
     if "user_id" not in session:
         return redirect("/login")
 
-    user_id = session["user_id"]
-    
-    # Check if user has a business
+    user_id  = session["user_id"]
     business = get_business_by_user(user_id)
-    
+
     if not business:
-        # User has no business - show create form
         return render_template("create_business.html")
-    
-    # User has business - ensure today's queue exists
+
     business_id = business["id"]
-    
-    # Check if today's queue exists
     today_queue = get_today_queue(business_id)
-    
+
     if not today_queue:
-        # Create today's queue (safe operation - won't duplicate)
         create_today_queue(business_id)
-        # Fetch it again to confirm
         today_queue = get_today_queue(business_id)
-    
-    # Get queue entries for today
-    queue_entries = get_queue_entries(today_queue["id"])
-    
-    # Get current count and max
-    current_count = count_entries_for_queue(today_queue["id"])
-    max_clients = business["max_clients_per_day"]
-    
-    # Check if queue is full
-    queue_full = is_queue_full(today_queue["id"], max_clients)
-    
-    # PHASE 15: Get average service time for display
-    avg_service_time = get_average_service_time(business_id)
+
+    queue_entries  = get_queue_entries(today_queue["id"])
+    current_count  = count_entries_for_queue(today_queue["id"])
+    max_clients    = business["max_clients_per_day"]
+    queue_full     = is_queue_full(today_queue["id"], max_clients)
+    avg_service_time = get_average_service_time(business_id)  # PHASE 15
 
     return render_template(
-        "dashboard.html", 
-        business=business, 
+        "dashboard.html",
+        business=business,
         today_queue=today_queue,
         queue_entries=queue_entries,
         current_count=current_count,
         max_clients=max_clients,
         queue_full=queue_full,
-        avg_service_time=avg_service_time  # PHASE 15
+        avg_service_time=avg_service_time,
     )
+
 
 @booking_bp.route("/create-business", methods=["POST"])
 def create_business_route():
     if "user_id" not in session:
         return redirect("/login")
-    
-    user_id = session["user_id"]
-    
-    # Check if user already has a business
+
+    user_id  = session["user_id"]
     existing = get_business_by_user(user_id)
     if existing:
         return redirect("/dashboard")
-    
-    # Get form data
-    name = request.form.get("name", "").strip()
-    category = request.form.get("category", "").strip()
-    city = request.form.get("city", "").strip()
+
+    name        = request.form.get("name", "").strip()
+    category    = request.form.get("category", "").strip()
+    city        = request.form.get("city", "").strip()
     max_clients = request.form.get("max_clients", 20)
-    
-    # Validate
+
     error = None
     if not name:
         error = "Business name is required"
@@ -152,49 +134,50 @@ def create_business_route():
         error = "City is required"
     elif len(city) < 2:
         error = "City name must be at least 2 characters"
-    
+
     if error:
         return render_template("create_business.html", error=error)
-    
-    # Validate and sanitize max_clients
+
     try:
         max_clients = int(max_clients)
         if max_clients < 1:
             error = "Maximum clients must be at least 1"
-        elif max_clients > 100:
-            error = "Maximum clients cannot exceed 100"
+        elif max_clients > 500:
+            error = "Maximum clients cannot exceed 500"
     except (ValueError, TypeError):
         error = "Invalid number for maximum clients"
-    
+
     if error:
         return render_template("create_business.html", error=error)
-    
-    # Create business
+
     create_business(user_id, name, category, city, max_clients)
-    
     return redirect("/dashboard")
+
 
 @booking_bp.route("/settings", methods=["GET", "POST"])
 def settings():
     """Business settings page (OWNER ONLY)"""
     if "user_id" not in session:
         return redirect("/login")
-    
-    user_id = session["user_id"]
+
+    user_id  = session["user_id"]
     business = get_business_by_user(user_id)
-    
-    # No business = redirect to create
+
     if not business:
         return redirect("/dashboard")
-    
-    # Handle POST (update settings)
+
+    # ── POST: save settings ──────────────────────────────────────
     if request.method == "POST":
-        # Get form data
-        name = request.form.get("name", "").strip()
-        category = request.form.get("category", "").strip()
-        city = request.form.get("city", "").strip()
+        name        = request.form.get("name", "").strip()
+        category    = request.form.get("category", "").strip()
+        city        = request.form.get("city", "").strip()
         max_clients = request.form.get("max_clients", business["max_clients_per_day"])
-        
+
+        # PHASE 16: language preference (safe — column may not exist yet)
+        language = request.form.get("language", "en").strip()
+        if language not in ('en', 'fr', 'ar'):
+            language = 'en'
+
         # Validate
         error = None
         if not name:
@@ -209,62 +192,77 @@ def settings():
             error = "City is required"
         elif len(city) < 2:
             error = "City name must be at least 2 characters"
-        
-        # Validate max_clients
+
         if not error:
             try:
                 max_clients = int(max_clients)
                 if max_clients < 1:
                     error = "Maximum clients must be at least 1"
-                elif max_clients > 100:
-                    error = "Maximum clients cannot exceed 100"
+                elif max_clients > 500:
+                    error = "Maximum clients cannot exceed 500"
             except (ValueError, TypeError):
                 error = "Invalid number for maximum clients"
-        
-        # If validation failed, show error
+
         if error:
             return render_template("settings.html", business=business, error=error)
-        
-        # Update business (safe - does not affect existing queues)
+
+        # Save core business fields
         update_business(business["id"], name, category, city, max_clients)
-        
-        # Redirect with success message
+
+        # Save language (safe — silently skips if column doesn't exist yet)
+        try:
+            conn = get_db()
+            conn.execute(
+                "UPDATE businesses SET language = ? WHERE id = ?",
+                (language, business["id"])
+            )
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass  # Column missing → run migration_add_language.py
+
         return redirect("/settings?success=1")
-    
-    # Handle GET (show form)
+
+    # ── GET: show form ───────────────────────────────────────────
     success = request.args.get("success")
-    return render_template("settings.html", business=business, success=success)
+
+    # Safe language read — sqlite3.Row has no .get(), use row_get()
+    business_lang = row_get(business, "language", "en")
+
+    return render_template(
+        "settings.html",
+        business=business,
+        business_lang=business_lang,
+        success=success,
+    )
+
 
 @booking_bp.route("/add-client", methods=["POST"])
 def add_client():
     """Add a walk-in client to today's queue (OWNER ONLY)"""
     if "user_id" not in session:
         return redirect("/login")
-    
-    user_id = session["user_id"]
+
+    user_id  = session["user_id"]
     business = get_business_by_user(user_id)
-    
+
     if not business:
         return redirect("/dashboard")
-    
-    # Ensure today's queue exists
+
     today_queue = get_today_queue(business["id"])
     if not today_queue:
         create_today_queue(business["id"])
         today_queue = get_today_queue(business["id"])
-    
-    # Get form data
-    client_name = request.form.get("client_name", "").strip()
+
+    client_name  = request.form.get("client_name",  "").strip()
     client_phone = request.form.get("client_phone", "").strip()
-    
-    # Helper function to render dashboard with error
+
     def render_dashboard_with_error(error_msg):
-        queue_entries = get_queue_entries(today_queue["id"])
-        current_count = count_entries_for_queue(today_queue["id"])
-        max_clients = business["max_clients_per_day"]
-        queue_full = is_queue_full(today_queue["id"], max_clients)
-        avg_service_time = get_average_service_time(business["id"])  # PHASE 15
-        
+        queue_entries    = get_queue_entries(today_queue["id"])
+        current_count    = count_entries_for_queue(today_queue["id"])
+        max_clients      = business["max_clients_per_day"]
+        queue_full       = is_queue_full(today_queue["id"], max_clients)
+        avg_service_time = get_average_service_time(business["id"])
         return render_template(
             "dashboard.html",
             business=business,
@@ -273,41 +271,40 @@ def add_client():
             current_count=current_count,
             max_clients=max_clients,
             queue_full=queue_full,
-            avg_service_time=avg_service_time,  # PHASE 15
-            error=error_msg
+            avg_service_time=avg_service_time,
+            error=error_msg,
         )
-    
-    # Add client to queue (validation happens inside add_queue_entry)
-    success, message = add_queue_entry(today_queue["id"], client_name, client_phone if client_phone else None)
-    
+
+    max_clients = business["max_clients_per_day"]
+    if is_queue_full(today_queue["id"], max_clients):
+        return render_dashboard_with_error("Queue is full for today")
+
+    success, message = add_queue_entry(
+        today_queue["id"],
+        client_name,
+        client_phone if client_phone else None
+    )
+
     if not success:
         return render_dashboard_with_error(message)
-    
-    # 🔥 EMIT REAL-TIME UPDATE
-    print(f"🔥 [ADD-CLIENT] Emitting update for business {business['id']}")
+
     emit_queue_update(business["id"], today_queue["id"])
-    
     return redirect("/dashboard")
+
 
 @booking_bp.route("/mark-done/<int:entry_id>")
 def mark_done(entry_id):
-    """
-    Mark a queue entry as completed (OWNER ONLY)
-    PHASE 15: Now records completion timestamp
-    """
+    """Mark a queue entry as completed (OWNER ONLY) — PHASE 15 records timestamp"""
     if "user_id" not in session:
         return redirect("/login")
-    
-    # Verify the entry belongs to this user's business
-    user_id = session["user_id"]
+
+    user_id  = session["user_id"]
     business = get_business_by_user(user_id)
-    
+
     if not business:
         return redirect("/dashboard")
-    
+
     db = get_db()
-    
-    # Check entry exists and belongs to this business
     entry = db.execute(
         """
         SELECT qe.*, dq.id as queue_id FROM queue_entries qe
@@ -316,39 +313,32 @@ def mark_done(entry_id):
         """,
         (entry_id, business["id"])
     ).fetchone()
-    
+
     if not entry:
         db.close()
         return redirect("/dashboard")
-    
+
     queue_id = entry["queue_id"]
     db.close()
-    
-    # PHASE 15: Use new function that records completion timestamp
+
     mark_entry_completed(entry_id)
-    
-    # 🔥 EMIT REAL-TIME UPDATE
-    print(f"🔥 [MARK-DONE] Emitting update for business {business['id']}")
     emit_queue_update(business["id"], queue_id)
-    
     return redirect("/dashboard")
+
 
 @booking_bp.route("/mark-skipped/<int:entry_id>")
 def mark_skipped(entry_id):
     """Mark a queue entry as skipped (OWNER ONLY)"""
     if "user_id" not in session:
         return redirect("/login")
-    
-    # Verify the entry belongs to this user's business
-    user_id = session["user_id"]
+
+    user_id  = session["user_id"]
     business = get_business_by_user(user_id)
-    
+
     if not business:
         return redirect("/dashboard")
-    
+
     db = get_db()
-    
-    # Check entry exists and belongs to this business
     entry = db.execute(
         """
         SELECT qe.*, dq.id as queue_id FROM queue_entries qe
@@ -357,146 +347,91 @@ def mark_skipped(entry_id):
         """,
         (entry_id, business["id"])
     ).fetchone()
-    
+
     if not entry:
         db.close()
         return redirect("/dashboard")
-    
-    # Update status
-    db.execute(
-        "UPDATE queue_entries SET status = 'skipped' WHERE id = ?",
-        (entry_id,)
-    )
+
+    db.execute("UPDATE queue_entries SET status = 'skipped' WHERE id = ?", (entry_id,))
     db.commit()
-    
     queue_id = entry["queue_id"]
     db.close()
-    
-    # 🔥 EMIT REAL-TIME UPDATE
-    print(f"🔥 [MARK-SKIPPED] Emitting update for business {business['id']}")
+
     emit_queue_update(business["id"], queue_id)
-    
     return redirect("/dashboard")
 
 
-# ========================================
+# ════════════════════════════════════════════════════════════════
 # PUBLIC ROUTES (NO LOGIN REQUIRED)
-# ========================================
+# ════════════════════════════════════════════════════════════════
 
 @booking_bp.route("/b/<int:business_id>", methods=["GET", "POST"])
 def public_booking(business_id):
-    """Public booking page for customers (NO LOGIN REQUIRED)"""
-    
-    # Validate business_id is positive
+    """Public booking page for customers"""
+
     if business_id <= 0:
-        return render_template(
-            "public_booking.html",
-            error="Invalid business ID",
-            business=None
-        )
-    
-    # Get business
+        return render_template("public_booking.html", error="Invalid business ID", business=None)
+
     try:
         business = get_business_by_id(business_id)
-    except Exception as e:
-        return render_template(
-            "public_booking.html",
-            error="An error occurred. Please try again later.",
-            business=None
-        )
-    
-    # Business not found
+    except Exception:
+        return render_template("public_booking.html",
+                               error="An error occurred. Please try again later.", business=None)
+
     if not business:
-        return render_template(
-            "public_booking.html",
-            error="Business not found",
-            business=None
-        )
-    
-    # Ensure today's queue exists
+        return render_template("public_booking.html", error="Business not found", business=None)
+
     try:
         today_queue = get_today_queue(business_id)
-        
         if not today_queue:
             create_today_queue(business_id)
             today_queue = get_today_queue(business_id)
-    except Exception as e:
-        return render_template(
-            "public_booking.html",
-            business=business,
-            error="An error occurred. Please try again later.",
-            current_count=0,
-            max_clients=business["max_clients_per_day"],
-            queue_full=False
-        )
-    
-    # Get current count
+    except Exception:
+        return render_template("public_booking.html", business=business,
+                               error="An error occurred. Please try again later.",
+                               current_count=0,
+                               max_clients=business["max_clients_per_day"],
+                               queue_full=False)
+
     current_count = count_entries_for_queue(today_queue["id"])
-    max_clients = business["max_clients_per_day"]
-    queue_full = is_queue_full(today_queue["id"], max_clients)
-    
-    # Handle POST (customer submission)
+    max_clients   = business["max_clients_per_day"]
+    queue_full    = is_queue_full(today_queue["id"], max_clients)
+
     if request.method == "POST":
-        client_name = request.form.get("client_name", "").strip()
+        client_name  = request.form.get("client_name",  "").strip()
         client_phone = request.form.get("client_phone", "").strip()
-        
-        # Validate name
+
         name_valid, name_error = validate_client_name(client_name)
         if not name_valid:
-            return render_template(
-                "public_booking.html",
-                business=business,
-                current_count=current_count,
-                max_clients=max_clients,
-                queue_full=queue_full,
-                error=name_error
-            )
-        
-        # Validate phone (required for public bookings)
+            return render_template("public_booking.html", business=business,
+                                   current_count=current_count, max_clients=max_clients,
+                                   queue_full=queue_full, error=name_error)
+
         phone_valid, phone_error = validate_phone_number(client_phone)
         if not phone_valid:
-            return render_template(
-                "public_booking.html",
-                business=business,
-                current_count=current_count,
-                max_clients=max_clients,
-                queue_full=queue_full,
-                error=phone_error
-            )
-        
-        # Check if queue is full
+            return render_template("public_booking.html", business=business,
+                                   current_count=current_count, max_clients=max_clients,
+                                   queue_full=queue_full, error=phone_error)
+
         if queue_full:
-            return render_template(
-                "public_booking.html",
-                business=business,
-                current_count=current_count,
-                max_clients=max_clients,
-                queue_full=True,
-                error=f"Sorry, the queue is full for today. Maximum {max_clients} clients per day."
-            )
-        
-        # Add to queue (validation and duplicate check happens inside)
+            return render_template("public_booking.html", business=business,
+                                   current_count=current_count, max_clients=max_clients,
+                                   queue_full=True,
+                                   error=f"Sorry, the queue is full for today. Maximum {max_clients} clients per day.")
+
         success, message = add_queue_entry(today_queue["id"], client_name, client_phone)
-        
+
         if not success:
-            return render_template(
-                "public_booking.html",
-                business=business,
-                current_count=current_count,
-                max_clients=max_clients,
-                queue_full=queue_full,
-                error=message
-            )
-        
-        # 🔥 EMIT REAL-TIME UPDATE
-        print(f"🔥 [PUBLIC-BOOKING] Emitting update for business {business_id}")
+            return render_template("public_booking.html", business=business,
+                                   current_count=current_count, max_clients=max_clients,
+                                   queue_full=queue_full, error=message)
+
         emit_queue_update(business_id, today_queue["id"])
-        
-        # PHASE 15: Calculate position and estimated wait time
-        new_position = current_count + 1
+
+        # PHASE 15: position + estimated wait
+        new_position   = current_count + 1
         estimated_wait = estimate_wait_time(today_queue["id"], new_position, business_id)
-        
-        # Success - show confirmation with wait time
+
         return render_template(
             "public_booking.html",
             business=business,
@@ -506,14 +441,9 @@ def public_booking(business_id):
             success=True,
             client_name=client_name,
             position=new_position,
-            estimated_wait=estimated_wait  # PHASE 15
+            estimated_wait=estimated_wait,
         )
-    
-    # Handle GET (show form)
-    return render_template(
-        "public_booking.html",
-        business=business,
-        current_count=current_count,
-        max_clients=max_clients,
-        queue_full=queue_full
-    )
+
+    return render_template("public_booking.html", business=business,
+                           current_count=current_count, max_clients=max_clients,
+                           queue_full=queue_full)

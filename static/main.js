@@ -1,607 +1,364 @@
-// RendezVousDZ - Main JavaScript File with Real-Time Support
+// RendezVousDZ - Main JavaScript
+// Global dark mode + logo swap + real-time queue
 
-// Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize all components
+    initTheme();           // 🌙 FIRST — before anything renders
     initAnimations();
     initFormValidation();
     initPasswordToggle();
     initQueueUpdates();
     initNotifications();
     initThemeEffects();
-    initRealtimeQueue(); // 🔥 NEW: Real-time queue updates
+    initRealtimeQueue();
 });
 
-// 🔥 REAL-TIME QUEUE UPDATES
-function initRealtimeQueue() {
-    console.log('🚀 initRealtimeQueue() called');
-    
-    // Check if we're on a page that needs real-time updates
-    const businessId = getBusinessIdFromPage();
-    console.log('🔍 Business ID detected:', businessId);
-    
-    if (!businessId) {
-        console.log('❌ No business ID found, skipping real-time');
-        return; // Not on a queue page
+// ═══════════════════════════════════════════════════════
+// 🌙 GLOBAL DARK MODE
+// ═══════════════════════════════════════════════════════
+const THEME_KEY = 'rvdz_theme';
+
+function initTheme() {
+    const saved = localStorage.getItem(THEME_KEY) || 'light';
+    _applyTheme(saved);
+}
+
+function _applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_KEY, theme);
+
+    // Update ALL toggle buttons on the page
+    document.querySelectorAll('.theme-toggle').forEach(btn => {
+        const lightIcon = btn.querySelector('.theme-icon-light');
+        const darkIcon  = btn.querySelector('.theme-icon-dark');
+        if (lightIcon) lightIcon.style.display = theme === 'dark' ? 'none'   : '';
+        if (darkIcon)  darkIcon.style.display  = theme === 'dark' ? ''       : 'none';
+    });
+
+    // Swap logos — works regardless of current src value
+    // Strategy: match any logo img and set the correct one
+    document.querySelectorAll('img.auth-logo, img.dashboard-logo').forEach(img => {
+        img.src = theme === 'dark'
+            ? '/static/logo_white.png'
+            : '/static/logo_blue.png';
+    });
+
+    // Analytics charts rebuild if present
+    if (window._chartsBuilt && typeof buildCharts === 'function') {
+        setTimeout(buildCharts, 50);
     }
-    
-    console.log('📡 Loading Socket.IO library...');
-    // Load Socket.IO client library
-    const script = document.createElement('script');
-    script.src = 'https://cdn.socket.io/4.5.4/socket.io.min.js';
-    script.onload = function() {
-        console.log('✅ Socket.IO library loaded');
-        connectToRealtimeQueue(businessId);
-    };
-    script.onerror = function() {
-        console.error('❌ Failed to load Socket.IO library');
-    };
+}
+
+// Called by onclick="toggleTheme()" on any button
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    _applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+
+window.toggleTheme = toggleTheme;
+
+
+// ═══════════════════════════════════════════════════════
+// 🔥 REAL-TIME QUEUE UPDATES
+// ═══════════════════════════════════════════════════════
+function initRealtimeQueue() {
+    const businessId = getBusinessIdFromPage();
+    if (!businessId) return;
+
+    const script  = document.createElement('script');
+    script.src    = 'https://cdn.socket.io/4.5.4/socket.io.min.js';
+    script.onload = () => connectToRealtimeQueue(businessId);
+    script.onerror= () => console.error('❌ Failed to load Socket.IO');
     document.head.appendChild(script);
 }
 
 function getBusinessIdFromPage() {
-    // Dashboard page
-    const publicLinkBtn = document.querySelector('a[href^="/b/"]');
-    if (publicLinkBtn) {
-        const match = publicLinkBtn.getAttribute('href').match(/\/b\/(\d+)/);
-        return match ? match[1] : null;
+    const btn = document.querySelector('a[href^="/b/"]');
+    if (btn) {
+        const m = btn.getAttribute('href').match(/\/b\/(\d+)/);
+        return m ? m[1] : null;
     }
-    
-    // Public booking page
-    const currentPath = window.location.pathname;
-    const match = currentPath.match(/\/b\/(\d+)/);
-    return match ? match[1] : null;
+    const m = window.location.pathname.match(/\/b\/(\d+)/);
+    return m ? m[1] : null;
 }
 
 function connectToRealtimeQueue(businessId) {
-    console.log('🔌 Connecting to SocketIO for business:', businessId);
-    
-    // Connect to SocketIO server
     const socket = io();
-    
-    // Join the business-specific room
-    socket.on('connect', function() {
-        console.log('🔥 Real-time connected - Socket ID:', socket.id);
-        console.log('📤 Emitting join event for business:', businessId);
-        socket.emit('join', { business_id: businessId });
-    });
-    
-    // Listen for queue updates
-    socket.on('queue_updated', function(data) {
-        console.log('📊 Queue updated EVENT RECEIVED:', data);
-        console.log('🔍 Comparing business IDs:', data.business_id, '==', businessId);
-        
-        if (data.business_id == businessId) {
-            console.log('✅ Business ID matches! Updating display...');
-            updateQueueDisplay(data);
-        } else {
-            console.log('❌ Business ID mismatch - ignoring update');
-        }
-    });
-    
-    socket.on('disconnect', function() {
-        console.log('❌ Real-time disconnected');
-    });
-    
-    socket.on('joined', function(data) {
-        console.log('✅ Successfully joined room:', data.room);
-    });
+    socket.on('connect',       () => socket.emit('join', { business_id: businessId }));
+    socket.on('queue_updated', data => { if (data.business_id == businessId) updateQueueDisplay(data); });
+    socket.on('disconnect',    () => console.log('❌ Real-time disconnected'));
 }
 
 function updateQueueDisplay(data) {
-    console.log('🎨 updateQueueDisplay() called with data:', data);
-    
-    // Update stats
+    // Current count stat card
     const currentCountEl = document.querySelector('.stat-value');
-    console.log('📊 Current count element:', currentCountEl);
     if (currentCountEl && currentCountEl.textContent !== data.current_count.toString()) {
-        console.log('✏️ Updating current count from', currentCountEl.textContent, 'to', data.current_count);
         currentCountEl.textContent = data.current_count;
         animateElement(currentCountEl);
     }
-    
-    // Update remaining slots
-    const remainingSlots = data.max_clients - data.current_count;
+
+    // Remaining slots
     const statCards = document.querySelectorAll('.stat-card');
-    console.log('📊 Stat cards found:', statCards.length);
     if (statCards.length >= 3) {
         const remainingEl = statCards[2].querySelector('.stat-value');
         if (remainingEl) {
-            console.log('✏️ Updating remaining slots to', remainingSlots);
-            remainingEl.textContent = remainingSlots;
+            remainingEl.textContent = data.max_clients - data.current_count;
             remainingEl.style.color = data.queue_full ? 'var(--error)' : 'var(--success)';
             animateElement(remainingEl);
         }
     }
-    
-    // Update queue count badge
+
+    // Queue count badge
     const queueCountEl = document.querySelector('.queue-count');
-    console.log('🏷️ Queue count badge:', queueCountEl);
     if (queueCountEl) {
-        console.log('✏️ Updating queue count badge to', `${data.current_count}/${data.max_clients}`);
         queueCountEl.textContent = `${data.current_count}/${data.max_clients}`;
         animateElement(queueCountEl);
     }
-    
-    // Update queue full alert
-    const queueFullAlert = document.querySelector('[style*="rgba(239, 68, 68"]');
+
+    // Queue full alert
+    const queueFullAlert = document.querySelector('[data-queue-full-alert]');
     if (data.queue_full && !queueFullAlert && window.location.pathname.includes('/dashboard')) {
-        console.log('⚠️ Adding queue full alert');
         const statsGrid = document.querySelector('.stats-grid');
         if (statsGrid) {
             const alert = document.createElement('div');
-            alert.style.cssText = 'background: rgba(239, 68, 68, 0.1); border: 2px solid var(--error); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-xl); text-align: center;';
-            alert.innerHTML = `<p style="color: var(--error); font-weight: 700; font-size: 1.125rem; margin: 0;">⚠️ Queue Full - Daily limit reached (${data.max_clients}/${data.max_clients})</p>`;
+            alert.setAttribute('data-queue-full-alert', '1');
+            alert.style.cssText = 'background:rgba(239,68,68,0.1);border:2px solid var(--error);border-radius:var(--radius-lg);padding:var(--space-lg);margin-bottom:var(--space-xl);text-align:center;';
+            alert.innerHTML = `<p style="color:var(--error);font-weight:700;font-size:1.125rem;margin:0;">⚠️ Queue Full - Daily limit reached (${data.max_clients}/${data.max_clients})</p>`;
             statsGrid.after(alert);
         }
     } else if (!data.queue_full && queueFullAlert) {
-        console.log('✅ Removing queue full alert');
         queueFullAlert.remove();
     }
-    
-    // Update queue list (DASHBOARD ONLY)
+
+    // Queue list (dashboard only)
     if (window.location.pathname.includes('/dashboard')) {
-        console.log('📋 Updating queue list with', data.queue_entries.length, 'entries');
         updateQueueList(data.queue_entries);
     }
-    
-    // Update public booking page counter
+
+    // Public booking page counter
     if (window.location.pathname.includes('/b/')) {
-        console.log('🌐 Updating public booking page');
-        const queueStatus = document.querySelector('[style*="background: var(--light-gray)"]');
-        if (queueStatus) {
-            const statusText = queueStatus.querySelector('p strong');
-            if (statusText) {
-                statusText.textContent = `${data.current_count}/${data.max_clients}`;
-            }
-        }
-        
-        // Disable form if queue is full
+        const statusStrong = document.querySelector('.queue-status-count');
+        if (statusStrong) statusStrong.textContent = `${data.current_count}/${data.max_clients}`;
+
         const submitBtn = document.querySelector('button[type="submit"]');
-        const inputs = document.querySelectorAll('input[name="client_name"], input[name="client_phone"]');
-        
+        const inputs    = document.querySelectorAll('input[name="client_name"], input[name="client_phone"]');
         if (data.queue_full) {
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Queue Full';
-            }
-            inputs.forEach(input => input.disabled = true);
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Queue Full'; }
+            inputs.forEach(i => i.disabled = true);
         } else {
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Join Queue';
-            }
-            inputs.forEach(input => input.disabled = false);
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Join Queue'; }
+            inputs.forEach(i => i.disabled = false);
         }
     }
-    
-    console.log('✅ updateQueueDisplay() completed');
 }
 
 function updateQueueList(entries) {
-    const queueList = document.querySelector('.queue-list');
+    const queueList  = document.querySelector('.queue-list');
     const emptyState = document.querySelector('.empty-state');
-    
+
     if (!entries || entries.length === 0) {
-        // Show empty state
-        if (queueList) {
-            queueList.style.display = 'none';
-        }
+        if (queueList) queueList.style.display = 'none';
         if (!emptyState) {
-            const queueSection = document.querySelector('.queue-section');
-            if (queueSection) {
+            const section = document.querySelector('.queue-section');
+            if (section) {
                 const empty = document.createElement('div');
                 empty.className = 'empty-state';
-                empty.innerHTML = `
-                    <div class="empty-state-icon">📋</div>
-                    <h4>No clients in queue</h4>
-                    <p>Add a client above to get started</p>
-                `;
-                queueSection.appendChild(empty);
+                empty.innerHTML = '<div class="empty-state-icon">📋</div><h4>No clients in queue</h4><p>Add a client above to get started</p>';
+                section.appendChild(empty);
             }
         }
         return;
     }
-    
-    // Hide empty state
-    if (emptyState) {
-        emptyState.style.display = 'none';
-    }
-    
-    if (!queueList) {
-        return;
-    }
-    
-    queueList.style.display = 'block';
-    
-    // Build new queue HTML
-    let queueHTML = '';
-    entries.forEach((entry, index) => {
-        queueHTML += `
-            <div class="queue-item" style="animation: slideInLeft 0.4s ease-out both;">
-                <div class="queue-number">#${index + 1}</div>
-                
-                <div class="queue-details">
-                    <div class="queue-name">${escapeHtml(entry.client_name)}</div>
-                    <div class="queue-meta">
-                        <span class="queue-status status-${entry.status}">
-                            ${capitalizeFirst(entry.status)}
-                        </span>
-                        ${entry.client_phone ? `<span class="queue-time">📞 ${escapeHtml(entry.client_phone)}</span>` : ''}
-                    </div>
-                </div>
-                
-                <div class="queue-actions">
-                    ${entry.status === 'waiting' ? `
-                        <a href="/mark-done/${entry.id}" class="btn btn-success">Mark Done</a>
-                        <a href="/mark-skipped/${entry.id}" class="btn btn-ghost">Skip</a>
-                    ` : ''}
+
+    if (emptyState) emptyState.style.display = 'none';
+    if (!queueList) return;
+    queueList.style.display = 'flex';
+
+    queueList.innerHTML = entries.map((entry, i) => `
+        <div class="queue-item" style="animation:slideInLeft 0.4s ease-out both;">
+            <div class="queue-number">#${i + 1}</div>
+            <div class="queue-details">
+                <div class="queue-name">${escapeHtml(entry.client_name)}</div>
+                <div class="queue-meta">
+                    <span class="queue-status status-${entry.status}">${capitalizeFirst(entry.status)}</span>
+                    ${entry.client_phone ? `<span class="queue-time">📞 ${escapeHtml(entry.client_phone)}</span>` : ''}
                 </div>
             </div>
-        `;
-    });
-    
-    queueList.innerHTML = queueHTML;
-    animateElement(queueList);
+            <div class="queue-actions">
+                ${entry.status === 'waiting' ? `
+                    <a href="/mark-done/${entry.id}" class="btn btn-success">Mark Done</a>
+                    <a href="/mark-skipped/${entry.id}" class="btn btn-ghost">Skip</a>
+                ` : ''}
+            </div>
+        </div>`).join('');
 }
 
-function animateElement(element) {
-    element.style.animation = 'none';
-    setTimeout(() => {
-        element.style.animation = 'pulse 0.3s ease-in-out';
-    }, 10);
-}
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function capitalizeFirst(str) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-// Animation Initialization
+// ═══════════════════════════════════════════════════════
+// ANIMATIONS
+// ═══════════════════════════════════════════════════════
 function initAnimations() {
-    // Add staggered fade-in animations to elements
-    const animatedElements = document.querySelectorAll('.animate-fadeIn');
-    animatedElements.forEach((element, index) => {
-        element.style.animationDelay = `${index * 0.1}s`;
-    });
-
-    // Parallax effect for floating shapes
-    const shapes = document.querySelectorAll('.floating-shape');
-    if (shapes.length > 0) {
-        window.addEventListener('mousemove', (e) => {
-            const mouseX = e.clientX / window.innerWidth;
-            const mouseY = e.clientY / window.innerHeight;
-            
-            shapes.forEach((shape, index) => {
-                const speed = (index + 1) * 10;
-                const x = (mouseX - 0.5) * speed;
-                const y = (mouseY - 0.5) * speed;
-                shape.style.transform = `translate(${x}px, ${y}px)`;
-            });
+    const observer = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+            if (e.isIntersecting) {
+                e.target.style.animation = 'fadeIn 0.5s ease-out both';
+                observer.unobserve(e.target);
+            }
         });
-    }
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.card, .stat-card, .feature-card').forEach(c => observer.observe(c));
 }
 
-// Form Validation
+function animateElement(el) {
+    el.style.animation = 'none';
+    el.offsetHeight;
+    el.style.animation = 'pulse 0.4s ease-out';
+}
+
+
+// ═══════════════════════════════════════════════════════
+// FORM VALIDATION
+// ═══════════════════════════════════════════════════════
 function initFormValidation() {
-    const forms = document.querySelectorAll('form');
-    
-    forms.forEach(form => {
-        const submitButton = form.querySelector('button[type="submit"]');
-        
-        form.addEventListener('submit', function(e) {
-            const inputs = form.querySelectorAll('input[required]');
-            let isValid = true;
-            
-            inputs.forEach(input => {
-                if (!validateInput(input)) {
-                    isValid = false;
-                }
-            });
-            
-            if (!isValid) {
-                e.preventDefault();
-                return false;
-            }
-            
-            // Add loading state to button
-            if (submitButton) {
-                submitButton.classList.add('btn-loading');
-                submitButton.disabled = true;
-            }
-        });
-        
-        // Real-time validation
-        const inputs = form.querySelectorAll('input');
-        inputs.forEach(input => {
-            input.addEventListener('blur', function() {
-                validateInput(this);
-            });
-            
-            input.addEventListener('input', function() {
-                removeError(this);
+    document.querySelectorAll('form').forEach(form => {
+        form.querySelectorAll('input[required], select[required]').forEach(input => {
+            input.addEventListener('blur', () => validateField(input));
+            input.addEventListener('input', () => {
+                if (input.classList.contains('input-error')) validateField(input);
             });
         });
     });
 }
 
-function validateInput(input) {
-    const value = input.value.trim();
-    const type = input.type;
-    
+function validateField(input) {
+    if (!input.value.trim()) { showError(input, `This field is required`); return false; }
+    if (input.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value)) {
+        showError(input, 'Please enter a valid email address'); return false;
+    }
+    if (input.type === 'password' && input.value.length < 8) {
+        showError(input, 'Password must be at least 8 characters'); return false;
+    }
     removeError(input);
-    
-    if (input.required && !value) {
-        showError(input, 'This field is required');
-        return false;
-    }
-    
-    if (type === 'email' && value) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(value)) {
-            showError(input, 'Please enter a valid email address');
-            return false;
-        }
-    }
-    
-    if (type === 'password' && value) {
-        if (value.length < 6) {
-            showError(input, 'Password must be at least 6 characters');
-            return false;
-        }
-    }
-    
     return true;
 }
 
 function showError(input, message) {
     input.classList.add('input-error');
     input.style.borderColor = 'var(--error)';
-    
-    const errorElement = document.createElement('div');
-    errorElement.className = 'field-error';
-    errorElement.style.cssText = `
-        color: var(--error);
-        font-size: 0.875rem;
-        margin-top: 0.25rem;
-        font-weight: 500;
-    `;
-    errorElement.textContent = message;
-    
     const parent = input.parentElement;
-    const existingError = parent.querySelector('.field-error');
-    if (existingError) {
-        existingError.remove();
-    }
-    
-    parent.appendChild(errorElement);
+    const existing = parent.querySelector('.field-error');
+    if (existing) existing.remove();
+    const err = document.createElement('span');
+    err.className = 'field-error';
+    err.style.cssText = 'color:var(--error);font-size:0.8rem;margin-top:0.25rem;display:block;';
+    err.textContent = message;
+    parent.appendChild(err);
 }
 
 function removeError(input) {
     input.classList.remove('input-error');
     input.style.borderColor = '';
-    
-    const parent = input.parentElement;
-    const errorElement = parent.querySelector('.field-error');
-    if (errorElement) {
-        errorElement.remove();
-    }
+    const err = input.parentElement.querySelector('.field-error');
+    if (err) err.remove();
 }
 
-// Password Toggle Functionality
+
+// ═══════════════════════════════════════════════════════
+// PASSWORD TOGGLE
+// ═══════════════════════════════════════════════════════
 function initPasswordToggle() {
-    const passwordInputs = document.querySelectorAll('input[type="password"]');
-    
-    passwordInputs.forEach(input => {
+    document.querySelectorAll('input[type="password"]').forEach(input => {
         const wrapper = input.parentElement;
-        
-        // Create toggle button
-        const toggleBtn = document.createElement('button');
-        toggleBtn.type = 'button';
-        toggleBtn.className = 'password-toggle';
-        toggleBtn.innerHTML = '👁️';
-        toggleBtn.setAttribute('aria-label', 'Toggle password visibility');
-        
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'password-toggle';
+        btn.innerHTML = '👁️';
+        btn.setAttribute('aria-label', 'Toggle password visibility');
         wrapper.style.position = 'relative';
-        wrapper.appendChild(toggleBtn);
-        
-        toggleBtn.addEventListener('click', function() {
-            const type = input.type === 'password' ? 'text' : 'password';
-            input.type = type;
-            this.innerHTML = type === 'password' ? '👁️' : '🙈';
+        wrapper.appendChild(btn);
+        btn.addEventListener('click', function() {
+            input.type = input.type === 'password' ? 'text' : 'password';
+            this.innerHTML = input.type === 'password' ? '👁️' : '🙈';
         });
     });
 }
 
-// Queue Updates (for dashboard)
+
+// ═══════════════════════════════════════════════════════
+// QUEUE ITEM ANIMATIONS
+// ═══════════════════════════════════════════════════════
 function initQueueUpdates() {
-    const queueItems = document.querySelectorAll('.queue-item');
-    
-    queueItems.forEach((item, index) => {
-        // Add entrance animation
-        item.style.animation = `slideInLeft 0.4s ease-out ${index * 0.1}s both`;
-        
-        // Update timestamps
-        const timeElement = item.querySelector('.queue-time');
-        if (timeElement) {
-            updateTimestamp(timeElement);
-            setInterval(() => updateTimestamp(timeElement), 60000); // Update every minute
-        }
+    document.querySelectorAll('.queue-item').forEach((item, i) => {
+        item.style.animation = `slideInLeft 0.4s ease-out ${i * 0.1}s both`;
     });
 }
 
-function updateTimestamp(element) {
-    const timestamp = element.dataset.timestamp;
-    if (timestamp) {
-        const date = new Date(timestamp);
-        const now = new Date();
-        const diff = Math.floor((now - date) / 1000 / 60); // minutes
-        
-        if (diff < 1) {
-            element.textContent = 'Just now';
-        } else if (diff < 60) {
-            element.textContent = `${diff} min ago`;
-        } else {
-            const hours = Math.floor(diff / 60);
-            element.textContent = `${hours} hour${hours > 1 ? 's' : ''} ago`;
-        }
-    }
-}
 
-// Notification System
+// ═══════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ═══════════════════════════════════════════════════════
 function initNotifications() {
-    // Check for success/error messages in URL params
-    const urlParams = new URLSearchParams(window.location.search);
-    const success = urlParams.get('success');
-    const error = urlParams.get('error');
-    
-    if (success) {
-        showNotification(success, 'success');
-    }
-    
-    if (error) {
-        showNotification(error, 'error');
-    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('success')) showNotification(params.get('success'), 'success');
+    if (params.get('error'))   showNotification(params.get('error'),   'error');
 }
 
 function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: var(--white);
-        padding: 1rem 1.5rem;
-        border-radius: var(--radius-lg);
-        box-shadow: var(--shadow-xl);
-        z-index: 9999;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        max-width: 400px;
-        animation: slideInRight 0.3s ease-out;
-        border-left: 4px solid ${type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--error)' : 'var(--info)'};
-    `;
-    
-    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
-    notification.innerHTML = `
-        <span style="font-size: 1.5rem;">${icon}</span>
-        <span style="font-weight: 500; color: var(--dark-gray);">${message}</span>
-        <button onclick="this.parentElement.remove()" style="
-            background: none;
-            border: none;
-            color: var(--mid-gray);
-            cursor: pointer;
-            padding: 0.25rem;
-            font-size: 1.25rem;
-            margin-left: auto;
-        ">×</button>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // Auto-remove after 5 seconds
+    const n = document.createElement('div');
+    n.style.cssText = `position:fixed;top:20px;right:20px;background:var(--surface-card);padding:1rem 1.5rem;
+        border-radius:var(--radius-lg);box-shadow:var(--shadow-xl);z-index:9999;display:flex;
+        align-items:center;gap:0.75rem;max-width:400px;animation:slideInRight 0.3s ease-out;
+        border-left:4px solid ${type==='success'?'var(--success)':type==='error'?'var(--error)':'var(--info)'};`;
+    const icon = type==='success' ? '✅' : type==='error' ? '❌' : 'ℹ️';
+    n.innerHTML = `<span style="font-size:1.5rem;">${icon}</span>
+        <span style="font-weight:500;color:var(--text-primary);">${message}</span>
+        <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.25rem;margin-left:auto;">×</button>`;
+    document.body.appendChild(n);
     setTimeout(() => {
-        notification.style.animation = 'slideOutRight 0.3s ease-out';
-        setTimeout(() => notification.remove(), 300);
+        n.style.animation = 'slideOutRight 0.3s ease-out';
+        setTimeout(() => n.remove(), 300);
     }, 5000);
 }
 
-// Theme Effects
+
+// ═══════════════════════════════════════════════════════
+// THEME EFFECTS (button hover glow)
+// ═══════════════════════════════════════════════════════
 function initThemeEffects() {
-    // Add dynamic gradient effect to buttons
-    const buttons = document.querySelectorAll('.btn-primary, .btn-secondary');
-    
-    buttons.forEach(button => {
-        button.addEventListener('mousemove', function(e) {
-            const rect = this.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            
-            this.style.setProperty('--mouse-x', `${x}px`);
-            this.style.setProperty('--mouse-y', `${y}px`);
+    document.querySelectorAll('.btn-primary, .btn-secondary').forEach(btn => {
+        btn.addEventListener('mousemove', function(e) {
+            const r = this.getBoundingClientRect();
+            this.style.setProperty('--mouse-x', `${e.clientX - r.left}px`);
+            this.style.setProperty('--mouse-y', `${e.clientY - r.top}px`);
         });
     });
-    
-    // Smooth scroll for anchor links
-    const anchorLinks = document.querySelectorAll('a[href^="#"]');
-    anchorLinks.forEach(link => {
+    document.querySelectorAll('a[href^="#"]').forEach(link => {
         link.addEventListener('click', function(e) {
-            const target = document.querySelector(this.getAttribute('href'));
-            if (target) {
-                e.preventDefault();
-                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+            const t = document.querySelector(this.getAttribute('href'));
+            if (t) { e.preventDefault(); t.scrollIntoView({ behavior: 'smooth' }); }
         });
     });
 }
 
-// Utility Functions
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
+
+// ═══════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════
+function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.appendChild(document.createTextNode(str));
+    return d.innerHTML;
 }
 
-// Queue Management Functions
-function joinQueue(name) {
-    if (!name || name.trim() === '') {
-        showNotification('Please enter a name', 'error');
-        return false;
-    }
-    
-    showNotification('Joining queue...', 'info');
-    return true;
+function capitalizeFirst(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function markAsDone(queueNumber) {
-    if (confirm(`Mark customer #${queueNumber} as done?`)) {
-        showNotification(`Customer #${queueNumber} marked as done`, 'success');
-        return true;
-    }
-    return false;
-}
+window.RendezVousDZ = { showNotification, toggleTheme };
 
-// Export functions for use in HTML
-window.RendezVousDZ = {
-    joinQueue,
-    markAsDone,
-    showNotification
-};
-
-// Add custom animations
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideOutRight {
-        from {
-            opacity: 1;
-            transform: translateX(0);
-        }
-        to {
-            opacity: 0;
-            transform: translateX(100%);
-        }
-    }
-    
-    @keyframes pulse {
-        0%, 100% {
-            transform: scale(1);
-        }
-        50% {
-            transform: scale(1.05);
-        }
-    }
+// Extra keyframes injected at runtime
+const _style = document.createElement('style');
+_style.textContent = `
+    @keyframes slideOutRight { from{opacity:1;transform:translateX(0)} to{opacity:0;transform:translateX(100%)} }
+    @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
 `;
-document.head.appendChild(style);
+document.head.appendChild(_style);

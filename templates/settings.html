@@ -12,7 +12,16 @@
 </head>
 <body>
     <div class="auth-wrapper">
-        <div class="auth-container">
+        <div class="auth-container" style="max-width: 560px;">
+
+            <!-- Theme toggle -->
+            <div style="display:flex; justify-content:flex-end; margin-bottom: 0.75rem;">
+                <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+                    <span class="theme-icon theme-icon-light">☀️</span>
+                    <span class="theme-icon theme-icon-dark">🌙</span>
+                </button>
+            </div>
+
             <div class="auth-card">
                 <div class="auth-header">
                     <img src="/static/logo.png" alt="RendezVousDZ" class="auth-logo">
@@ -21,86 +30,90 @@
                 </div>
 
                 {% if success %}
-                <div style="background: rgba(16, 185, 129, 0.1); border: 2px solid var(--success); border-radius: var(--radius-lg); padding: var(--space-md); margin-bottom: var(--space-lg); text-align: center;">
-                    <p style="color: var(--success); font-weight: 600; margin: 0;">
-                        ✅ Settings saved successfully!
-                    </p>
+                <div class="auth-success">
+                    ✅ Settings saved successfully!
                 </div>
                 {% endif %}
 
                 {% if error %}
-                <div class="auth-error">
-                    {{ error }}
-                </div>
+                <div class="auth-error">{{ error }}</div>
                 {% endif %}
 
                 <form method="POST" action="/settings" class="auth-form">
+
+                    <div class="settings-section-label">🏢 Business Info</div>
+
                     <div class="form-field">
                         <label for="name">Business Name</label>
-                        <input 
-                            type="text" 
-                            id="name" 
-                            name="name" 
-                            placeholder="e.g., Elite Barber Shop" 
-                            value="{{ business['name'] }}"
-                            required
-                            autofocus
-                        >
+                        <input type="text" id="name" name="name"
+                               placeholder="e.g., Elite Barber Shop"
+                               value="{{ business['name'] }}" required autofocus>
                     </div>
 
                     <div class="form-field">
                         <label for="category">Category</label>
                         <select id="category" name="category" required>
                             <option value="">Select a category</option>
-                            <option value="barber" {% if business['category'] == 'barber' %}selected{% endif %}>Barber Shop</option>
-                            <option value="salon" {% if business['category'] == 'salon' %}selected{% endif %}>Hair Salon</option>
-                            <option value="clinic" {% if business['category'] == 'clinic' %}selected{% endif %}>Medical Clinic</option>
-                            <option value="dentist" {% if business['category'] == 'dentist' %}selected{% endif %}>Dentist</option>
-                            <option value="spa" {% if business['category'] == 'spa' %}selected{% endif %}>Spa & Wellness</option>
-                            <option value="restaurant" {% if business['category'] == 'restaurant' %}selected{% endif %}>Restaurant</option>
-                            <option value="other" {% if business['category'] == 'other' %}selected{% endif %}>Other</option>
+                            <option value="barber"     {% if business['category']=='barber'     %}selected{% endif %}>Barber Shop</option>
+                            <option value="salon"      {% if business['category']=='salon'      %}selected{% endif %}>Hair Salon</option>
+                            <option value="clinic"     {% if business['category']=='clinic'     %}selected{% endif %}>Medical Clinic</option>
+                            <option value="dentist"    {% if business['category']=='dentist'    %}selected{% endif %}>Dentist</option>
+                            <option value="spa"        {% if business['category']=='spa'        %}selected{% endif %}>Spa & Wellness</option>
+                            <option value="restaurant" {% if business['category']=='restaurant' %}selected{% endif %}>Restaurant</option>
+                            <option value="other"      {% if business['category']=='other'      %}selected{% endif %}>Other</option>
                         </select>
                     </div>
 
                     <div class="form-field">
                         <label for="city">City</label>
-                        <input 
-                            type="text" 
-                            id="city" 
-                            name="city" 
-                            placeholder="e.g., Algiers" 
-                            value="{{ business['city'] }}"
-                            required
-                        >
+                        <input type="text" id="city" name="city"
+                               placeholder="e.g., Algiers"
+                               value="{{ business['city'] }}" required>
                     </div>
 
                     <div class="form-field">
                         <label for="max_clients">Max Clients Per Day</label>
-                        <input 
-                            type="number" 
-                            id="max_clients" 
-                            name="max_clients" 
-                            value="{{ business['max_clients_per_day'] }}" 
-                            min="1" 
-                            max="100"
-                            required
-                        >
-                        <small style="color: var(--mid-gray); font-size: 0.875rem; margin-top: 0.5rem; display: block;">
-                            Note: Changes apply to future bookings only
-                        </small>
+                        <input type="number" id="max_clients" name="max_clients"
+                               value="{{ business['max_clients_per_day'] }}"
+                               min="1" max="500" required>
+                        <small>Changes apply to future bookings only</small>
+                    </div>
+
+                    <!-- Language -->
+                    <div class="settings-section-label" style="margin-top: 0.5rem;">🌐 Language & Display</div>
+
+                    <div class="form-field">
+                        <label for="language">Interface Language</label>
+                        <select id="language" name="language">
+                            <option value="en" {% if business_lang == 'en' %}selected{% endif %}>🇬🇧 English</option>
+                            <option value="fr" {% if business_lang == 'fr' %}selected{% endif %}>🇫🇷 Français</option>
+                            <option value="ar" {% if business_lang == 'ar' %}selected{% endif %}>🇩🇿 العربية</option>
+                        </select>
+                        <small>Applies to the Digital Display screen</small>
                     </div>
 
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary w-full">
-                            Save Settings
+                            💾 Save Settings
                         </button>
                     </div>
                 </form>
 
-                <div class="auth-footer">
-                    <p>
-                        <a href="/dashboard">← Back to Dashboard</a>
+                <!-- Digital Display link -->
+                <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(30,136,229,0.07); border: 1.5px solid rgba(30,136,229,0.2); border-radius: var(--radius-lg); text-align: center;">
+                    <p style="font-weight: 700; color: var(--primary-blue); margin-bottom: 0.35rem; font-size: 0.95rem;">
+                        📺 Digital Display Mode
                     </p>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                        Put this on a tablet or TV for your waiting clients
+                    </p>
+                    <a href="/display/{{ business['id'] }}" target="_blank" class="btn btn-outline" style="font-size:0.875rem; padding:0.6rem 1.25rem;">
+                        🖥️ Open Display Screen
+                    </a>
+                </div>
+
+                <div class="auth-footer">
+                    <p><a href="/dashboard">← Back to Dashboard</a></p>
                 </div>
             </div>
         </div>

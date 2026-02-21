@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <meta name="description" content="Queue Display - RendezVousDZ">
+    <title>Queue Display – {{ business['name'] }}</title>
+
+    <!-- Prevent sleep on tablet -->
+    <meta http-equiv="refresh" content="300"> <!-- hard reload every 5 min as fallback -->
+
+    <link rel="stylesheet" href="/static/display.css">
+    <link rel="icon" type="image/png" href="/static/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;800;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+</head>
+<body class="display-body" data-business-id="{{ business['id'] }}">
+
+    <!-- ══ HEADER BAR ══════════════════════════════════════════ -->
+    <header class="disp-header">
+        <div class="disp-brand">
+            <img src="/static/logo_white.png" alt="RendezVousDZ" class="disp-logo">
+            <div class="disp-business-name">{{ business['name'] }}</div>
+        </div>
+        <div class="disp-clock" id="dispClock">--:--</div>
+    </header>
+
+    <!-- ══ MAIN CONTENT ════════════════════════════════════════ -->
+    <main class="disp-main">
+
+        <!-- NOW SERVING -->
+        <section class="disp-now-card" id="nowCard">
+            <div class="disp-section-label" id="nowLabel">NOW SERVING</div>
+            <div class="disp-number-wrap">
+                <div class="disp-number" id="nowNumber">—</div>
+            </div>
+            <div class="disp-client-name" id="nowName">Waiting to start…</div>
+        </section>
+
+        <!-- DIVIDER -->
+        <div class="disp-divider"></div>
+
+        <!-- NEXT IN LINE -->
+        <section class="disp-next-card" id="nextCard">
+            <div class="disp-section-label disp-next-label" id="nextLabel">NEXT IN LINE</div>
+            <div class="disp-next-number" id="nextNumber">—</div>
+            <div class="disp-next-name" id="nextName">–</div>
+        </section>
+
+    </main>
+
+    <!-- ══ QUEUE STRIP (scrolling upcoming) ════════════════════ -->
+    <footer class="disp-footer">
+        <div class="disp-footer-label">UPCOMING</div>
+        <div class="disp-upcoming-list" id="upcomingList">
+            <span class="disp-upcoming-empty">No more clients waiting</span>
+        </div>
+    </footer>
+
+    <!-- ══ STATUS DOT ══════════════════════════════════════════ -->
+    <div class="disp-status-dot" id="statusDot" title="Live connection"></div>
+
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+    // ════════════════════════════════════════════════════════════
+    // DISPLAY CONTROLLER
+    // ════════════════════════════════════════════════════════════
+
+    const BUSINESS_ID = document.body.dataset.businessId;
+    const LANG = '{{ lang }}';
+
+    // i18n strings
+    const T = {
+        en: {
+            nowServing: 'NOW SERVING',
+            nextInLine: 'NEXT IN LINE',
+            upcoming:   'UPCOMING',
+            noClients:  'No clients waiting',
+            noNext:     'Queue is clear',
+            waiting:    'Waiting to start…',
+            ticketNo:   '#',
+        },
+        fr: {
+            nowServing: 'EN SERVICE',
+            nextInLine: 'PROCHAIN',
+            upcoming:   'FILE D\'ATTENTE',
+            noClients:  'Aucun client en attente',
+            noNext:     'File vide',
+            waiting:    'En attente de début…',
+            ticketNo:   'N°',
+        },
+        ar: {
+            nowServing: 'يُخدم الآن',
+            nextInLine: 'التالي',
+            upcoming:   'القادمون',
+            noClients:  'لا يوجد عملاء',
+            noNext:     'الصف فارغ',
+            waiting:    'بانتظار البداية…',
+            ticketNo:   'رقم ',
+        },
+    };
+    const t = T[LANG] || T.en;
+
+    // Set labels
+    document.getElementById('nowLabel').textContent  = t.nowServing;
+    document.getElementById('nextLabel').textContent = t.nextInLine;
+    document.getElementById('nowName').textContent   = t.waiting;
+    document.getElementById('nextName').textContent  = t.noNext;
+
+    // RTL for Arabic
+    if (LANG === 'ar') {
+        document.documentElement.setAttribute('dir', 'rtl');
+        document.documentElement.setAttribute('lang', 'ar');
+    }
+
+    // ── Clock ────────────────────────────────────────────────────
+    function updateClock() {
+        const now = new Date();
+        document.getElementById('dispClock').textContent =
+            now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // ── State ────────────────────────────────────────────────────
+    let currentData = null;
+
+    // ── Render queue ─────────────────────────────────────────────
+    function renderQueue(entries) {
+        // Only waiting entries matter for display
+        const waiting = (entries || []).filter(e => e.status === 'waiting');
+
+        const nowNumberEl  = document.getElementById('nowNumber');
+        const nowNameEl    = document.getElementById('nowName');
+        const nextNumberEl = document.getElementById('nextNumber');
+        const nextNameEl   = document.getElementById('nextName');
+        const upcomingEl   = document.getElementById('upcomingList');
+
+        // — NOW SERVING (first waiting) —
+        if (waiting.length >= 1) {
+            const serving = waiting[0];
+            const newNum  = t.ticketNo + padNumber(serving._position || 1);
+            if (nowNumberEl.textContent !== newNum) {
+                animateChange(nowNumberEl, newNum);
+            }
+            animateChange(nowNameEl, serving.client_name);
+            document.getElementById('nowCard').classList.add('disp-active');
+        } else {
+            nowNumberEl.textContent = '—';
+            nowNameEl.textContent   = t.waiting;
+            document.getElementById('nowCard').classList.remove('disp-active');
+        }
+
+        // — NEXT IN LINE (second waiting) —
+        if (waiting.length >= 2) {
+            const next = waiting[1];
+            nextNumberEl.textContent = t.ticketNo + padNumber(next._position || 2);
+            nextNameEl.textContent   = next.client_name;
+            document.getElementById('nextCard').classList.add('disp-has-next');
+        } else {
+            nextNumberEl.textContent = '—';
+            nextNameEl.textContent   = t.noNext;
+            document.getElementById('nextCard').classList.remove('disp-has-next');
+        }
+
+        // — UPCOMING STRIP (3rd+) —
+        if (waiting.length >= 3) {
+            const rest = waiting.slice(2, 10); // show up to 8 more
+            upcomingEl.innerHTML = rest.map((e, i) =>
+                `<span class="disp-upcoming-chip">${t.ticketNo}${padNumber((e._position || (i+3)))} · ${escapeHtml(e.client_name)}</span>`
+            ).join('');
+        } else {
+            upcomingEl.innerHTML = `<span class="disp-upcoming-empty">${t.noClients}</span>`;
+        }
+    }
+
+    // Add sequential position to entries
+    function attachPositions(entries) {
+        let pos = 1;
+        return entries.map(e => {
+            if (e.status === 'waiting') { e._position = pos++; }
+            return e;
+        });
+    }
+
+    function padNumber(n) {
+        return String(n).padStart(2, '0');
+    }
+
+    function escapeHtml(str) {
+        const d = document.createElement('div');
+        d.appendChild(document.createTextNode(str));
+        return d.innerHTML;
+    }
+
+    // Animated number change
+    function animateChange(el, newVal) {
+        if (el.textContent === newVal) return;
+        el.classList.add('disp-flip-out');
+        setTimeout(() => {
+            el.textContent = newVal;
+            el.classList.remove('disp-flip-out');
+            el.classList.add('disp-flip-in');
+            setTimeout(() => el.classList.remove('disp-flip-in'), 500);
+        }, 250);
+    }
+
+    // ── Socket.IO real-time ─────────────────────────────────────
+    const statusDot = document.getElementById('statusDot');
+    const socket = io();
+
+    socket.on('connect', () => {
+        socket.emit('join', { business_id: BUSINESS_ID });
+        statusDot.classList.add('disp-online');
+        statusDot.classList.remove('disp-offline');
+    });
+
+    socket.on('disconnect', () => {
+        statusDot.classList.remove('disp-online');
+        statusDot.classList.add('disp-offline');
+    });
+
+    socket.on('queue_updated', (data) => {
+        if (data.business_id == BUSINESS_ID) {
+            const entries = attachPositions(data.queue_entries || []);
+            renderQueue(entries);
+        }
+    });
+
+    // ── Initial render from server-side data ─────────────────────
+    const initialEntries = attachPositions({{ entries | tojson }});
+    renderQueue(initialEntries);
+    </script>
+</body>
+</html>

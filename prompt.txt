@@ -1,98 +1,112 @@
-You are assisting on an existing Flask project called "RENDEZVOUSDZ".
-This is a real-world product, not a tutorial or refactor exercise.
+You are assisting on a real SaaS product called RENDEZVOUSDZ.
+
+This is NOT a tutorial project.
+This is a production-intended queue management platform for small businesses (barbers, clinics, etc.).
 
 =================================================
-🚨 ABSOLUTE RULES — READ FIRST
+🚨 ABSOLUTE RULES
 =================================================
-- Do NOT delete, rename, or refactor existing files
-- Do NOT change folder structure
-- Do NOT redesign UI, CSS, or templates
-- Do NOT modify working authentication or session logic
-- Do NOT introduce new frameworks or libraries
-- ONLY add minimal code required for the requested phase
-- Follow baby steps and explain WHY each step exists
-- If something is unclear, ask ONE precise question before coding
+- Do NOT refactor existing files unless explicitly requested.
+- Do NOT rename files.
+- Do NOT change folder structure.
+- Do NOT redesign UI.
+- Do NOT introduce new frameworks.
+- Do NOT break real-time logic.
+- Only add functionality requested.
+- Always explain file-by-file changes.
+- If unsure, ask ONE precise clarification question.
 
 =================================================
-🎯 PRODUCT IDEA (HUMAN LEVEL)
+🎯 PRODUCT OVERVIEW
 =================================================
-RENDEZVOUSDZ is a queue & appointment system for small businesses
-(barbers, clinics, salons, etc.).
+RENDEZVOUSDZ is a smart queue management system.
 
-There are TWO types of humans:
-1) Business Owner (has an account)
-2) Client / Customer (no account)
+Actors:
+1. Business Owner (authenticated)
+2. Public Client (no login)
 
-These roles must NEVER be mixed.
-
-=================================================
-👤 BUSINESS OWNER FLOW (PHASES 1–5)
-=================================================
-- Owner registers & logs in
-- Owner owns exactly ONE business (for now)
-- Owner creates their business from the dashboard
-- Business stores:
-  - name
-  - category
-  - city
-  - max clients per day
-- Owner dashboard shows:
-  - create business form (if none exists)
-  - business details (if already created)
-
-Clients are NOT involved yet.
+Core Features Completed:
+- Authentication system
+- Business creation (1 business per owner)
+- Daily queue logic (1 queue per day per business)
+- Walk-in client support (owner adds manually)
+- Public booking page (/b/<business_id>)
+- Daily client limit enforcement
+- Status management (waiting / done / skipped)
+- Validation and duplicate protection
+- Real-time queue updates using Flask-SocketIO
+- Business settings page
 
 =================================================
-👥 CLIENT FLOW (FUTURE — NOT IMPLEMENTED YET)
+🧱 ARCHITECTURE STRUCTURE
 =================================================
-- Client does NOT log in
-- Client visits public URL:
-  /b/<business_id>
-- Client joins queue by name & phone
-- Client receives a position number
 
-Do NOT implement this unless explicitly asked.
-
-=================================================
-🧱 CURRENT PHASE
-=================================================
-Phase 5 — Business Profile (IN PROGRESS / JUST ADDED)
-
-Phase 5 scope:
-- Business creation
-- Business ownership
-- Dashboard behavior based on business existence
-- Data persistence
-
-Phase 5 is NOT about queues.
-
-=================================================
-🏗️ SYSTEM ARCHITECTURE
-=================================================
 Project root:
-- app.py
-- routes/
-    - auth.py        # register, login, sessions
-    - booking.py     # dashboard + business logic
-- database/
-    - database.db
-    - db.py          # DB connection + helpers
-    - init_db.py     # DB schema
-- templates/
-    - home.html
-    - login.html
-    - register.html
-    - dashboard.html
-    - create_business.html
-- static/
-    - style.css
-    - dashboard.css
-    - auth.css
-    - main.js
+
+app.py
+routes/
+    auth.py
+    booking.py
+database/
+    db.py
+    init_db.py
+    database.db
+templates/
+    home.html
+    login.html
+    register.html
+    dashboard.html
+    create_business.html
+    public_booking.html
+    settings.html
+static/
+    style.css
+    dashboard.css
+    auth.css
+    main.js
 
 =================================================
-🗄️ DATABASE SCHEMA (CURRENT)
+⚙️ BACKEND ARCHITECTURE DETAILS
 =================================================
+
+app.py:
+- Initializes Flask
+- Initializes Flask-SocketIO
+- Registers blueprints
+- Handles socket events:
+    - connect
+    - disconnect
+    - join (room = business_<id>)
+
+SocketIO runs using:
+socketio.run(app)
+
+routes/auth.py:
+- Login
+- Register
+- Session management
+
+routes/booking.py:
+Handles:
+- /dashboard
+- /create-business
+- /settings
+- /add-client (walk-in)
+- /mark-done/<id>
+- /mark-skipped/<id>
+- /b/<business_id> (public booking)
+
+Real-time logic:
+emit_queue_update(business_id, queue_id)
+Emits:
+'queue_updated'
+Room:
+business_<business_id>
+
+=================================================
+🗄️ DATABASE STRUCTURE
+=================================================
+
 users:
 - id
 - email
@@ -100,52 +114,82 @@ users:
 - verified
 - created_at
 
-email_tokens:
-- id
-- user_id
-- token
-- created_at
-
 businesses:
 - id
-- user_id (owner)
+- user_id
 - name
 - category
 - city
 - max_clients_per_day
 
-=================================================
-🧠 DATA RELATIONSHIP (MENTAL MODEL)
-=================================================
-User (owner)
-  → Business
-      → (future) Daily Queue
-          → (future) Queue Entries (clients)
+daily_queues:
+- id
+- business_id
+- date
+
+queue_entries:
+- id
+- daily_queue_id
+- client_name
+- client_phone
+- status (waiting / done / skipped)
+- created_at
 
 =================================================
-🛠️ WHAT YOU MAY HELP WITH
+🔄 REAL-TIME ARCHITECTURE
 =================================================
-- Phase 5 completion
-- Preparing Phase 6 schema (daily queues)
-- Logic explanation
-- Small safe additions
-- Bug fixing (no refactors)
+
+1. Client connects via SocketIO
+2. Client emits:
+   'join' with business_id
+3. Server joins room:
+   business_<id>
+4. On queue change:
+   emit_queue_update()
+5. Frontend updates DOM dynamically
+
+Real-time works and must NOT be broken.
 
 =================================================
-⛔ WHAT YOU MUST NOT DO
+🧠 DESIGN PRINCIPLES
 =================================================
-- Do NOT implement queues unless asked
-- Do NOT implement client booking unless asked
-- Do NOT optimize or refactor
-- Do NOT redesign UI
-- Do NOT jump phases
+
+- Simple for non-technical business owners
+- Stable and predictable
+- No overengineering
+- No unnecessary abstraction
+- Clean separation of concerns
+- Business logic stays in db.py and routes
+- Templates stay mostly presentational
 
 =================================================
-🧩 OUTPUT REQUIREMENTS
+🎯 CURRENT STATE
 =================================================
-- Baby steps
-- File-by-file guidance
-- Exact code snippets
-- Explain each step
-- No assumptions
-- Safety over speed
+
+The platform is stable after Phase 14 (Real-time updates).
+We are now extending functionality carefully.
+
+No deployment yet.
+No Docker yet.
+No monetization yet.
+
+=================================================
+🛑 IMPORTANT
+=================================================
+
+If adding a new feature:
+- Do not touch unrelated routes.
+- Do not rewrite existing queries.
+- Do not introduce breaking schema changes.
+- Always add safe migrations if DB changes are needed.
+
+=================================================
+📤 OUTPUT FORMAT REQUIRED
+=================================================
+
+When implementing a new phase:
+- Provide baby steps.
+- Show file-by-file modifications.
+- Provide exact code blocks.
+- Explain briefly why each change exists.
+- Keep changes minimal and reversible.

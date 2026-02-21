@@ -6,11 +6,8 @@
     <meta name="description" content="Dashboard - RendezVousDZ Queue Management">
     <title>Dashboard - RendezVousDZ</title>
     
-    <!-- Stylesheets -->
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="/static/dashboard.css">
-    
-    <!-- Favicon -->
     <link rel="icon" type="image/png" href="/static/logo.png">
 </head>
 <body>
@@ -38,6 +35,10 @@
                     <a href="/b/{{ business['id'] }}" target="_blank" class="btn btn-secondary no-print" style="background: linear-gradient(135deg, var(--primary-orange), var(--accent-orange));">
                         📋 Public Booking Link
                     </a>
+                    <!-- PHASE 16: Analytics button -->
+                    <a href="/analytics" class="btn btn-outline no-print" style="border-color: #8B5CF6; color: #8B5CF6;">
+                        📊 Analytics
+                    </a>
                     <a href="/settings" class="btn btn-outline no-print">
                         ⚙️ Settings
                     </a>
@@ -55,7 +56,7 @@
         </div>
         {% endif %}
 
-        <!-- Stats Grid - PHASE 15: Added Average Service Time -->
+        <!-- Stats Grid -->
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-content">
@@ -80,7 +81,6 @@
                 </div>
             </div>
             
-            <!-- PHASE 15: Average Service Time Card -->
             <div class="stat-card">
                 <div class="stat-content">
                     <div class="stat-label">⏱️ Avg Service Time</div>
@@ -185,21 +185,13 @@
         </div>
     </div>
 
-    <!-- JavaScript -->
     <script src="/static/main.js"></script>
     <script>
-        // Update current date
         document.addEventListener('DOMContentLoaded', function() {
             const dateElement = document.getElementById('currentDate');
             if (dateElement) {
-                const options = { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                };
-                const today = new Date();
-                dateElement.textContent = today.toLocaleDateString('en-US', options);
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                dateElement.textContent = new Date().toLocaleDateString('en-US', options);
             }
         });
     </script>
