@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Login to RendezVousDZ - Digital Queue Management System">
+    <meta name="description" content="Login to RendezVousDZ">
     <title>Login - RendezVousDZ</title>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="/static/auth.css">
@@ -11,16 +11,16 @@
 </head>
 <body>
 
-    <!-- ══ GLOBAL CONTROLS (theme + language) ══ -->
+    <!-- ══ GLOBAL CONTROLS ══ -->
     <div class="global-controls">
         <div class="lang-picker">
             <button onclick="switchLanguage('en')" data-lang="en" title="English">EN</button>
             <button onclick="switchLanguage('fr')" data-lang="fr" title="Français">FR</button>
-            <button onclick="switchLanguage('ar')" data-lang="ar" title="العربية">AR</button>
+            <button onclick="switchLanguage('ar')" data-lang="ar" title="العربية">ع</button>
         </div>
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
-            <span class="theme-icon theme-icon-light">☀️</span>
-            <span class="theme-icon theme-icon-dark">🌙</span>
+            <span class="theme-icon theme-icon-light">🌙</span>
+            <span class="theme-icon theme-icon-dark">☀️</span>
         </button>
     </div>
 
@@ -29,63 +29,45 @@
             <div class="auth-card">
                 <div class="auth-header">
                     <img src="/static/logo.png" alt="RendezVousDZ Logo" class="auth-logo">
-                    <h2 class="auth-title">Welcome Back</h2>
-                    <p class="auth-subtitle">Sign in to manage your queue</p>
+                    <h2 class="auth-title" data-i18n="welcomeBack">Welcome Back</h2>
+                    <p class="auth-subtitle" data-i18n="welcomeBackSub">Sign in to manage your queue</p>
                 </div>
 
                 {% if error %}
-                <div class="auth-error">
-                    {{ error }}
-                </div>
+                <div class="auth-error">{{ error }}</div>
                 {% endif %}
 
                 <form method="POST" class="auth-form" autocomplete="on">
                     <div class="form-field">
-                        <label for="email">Email Address</label>
-                        <input 
-                            type="email" 
-                            id="email"
-                            name="email" 
-                            placeholder="you@example.com" 
-                            required
-                            autocomplete="email"
-                            autofocus
-                        >
+                        <label for="email" data-i18n="emailAddress">Email Address</label>
+                        <input type="email" id="email" name="email"
+                               placeholder="you@example.com"
+                               required autocomplete="email" autofocus>
                     </div>
-
                     <div class="form-field">
-                        <label for="password">Password</label>
-                        <input 
-                            type="password" 
-                            id="password"
-                            name="password" 
-                            placeholder="Enter your password" 
-                            required
-                            autocomplete="current-password"
-                        >
-                        <div class="forgot-password" style="margin-top: 0.5rem;">
-                            <a href="/forgot-password">Forgot your password?</a>
+                        <label for="password" data-i18n="password">Password</label>
+                        <input type="password" id="password" name="password"
+                               data-i18n-ph="password"
+                               placeholder="Enter your password"
+                               required autocomplete="current-password">
+                        <div class="forgot-password" style="margin-top:0.5rem;">
+                            <a href="/forgot-password" data-i18n="forgotPassword">Forgot your password?</a>
                         </div>
                     </div>
-
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary w-full">
-                            Sign In
-                        </button>
+                        <button type="submit" class="btn btn-primary w-full" data-i18n="signIn">Sign In</button>
                     </div>
                 </form>
 
-                <div class="auth-divider">
-                    <span>or</span>
-                </div>
+                <div class="auth-divider"><span data-i18n="orDivider">or</span></div>
 
                 <div class="auth-footer">
-                    <p>Don't have an account? <a href="/register">Create one now</a></p>
+                    <p><span data-i18n="noAccount">Don't have an account?</span> <a href="/register" data-i18n="createOne">Create one now</a></p>
                 </div>
             </div>
 
-            <div style="text-align: center; margin-top: 1.5rem;">
-                <a href="/" class="btn btn-ghost">← Back to Home</a>
+            <div style="text-align:center;margin-top:1.5rem;">
+                <a href="/" class="btn btn-ghost" data-i18n="backToHome">← Back to Home</a>
             </div>
         </div>
     </div>

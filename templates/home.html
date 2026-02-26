@@ -5,71 +5,57 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="RendezVousDZ - Professional Digital Queue Management System">
     <title>RendezVousDZ - Digital Queue System</title>
-    
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="/static/home.css">
     <link rel="icon" type="image/png" href="/static/logo.png">
 </head>
 <body>
-    <!-- Floating Decorative Shapes -->
     <div class="floating-shape shape-1"></div>
     <div class="floating-shape shape-2"></div>
     <div class="floating-shape shape-3"></div>
 
-    <!-- ══ GLOBAL CONTROLS (theme + language) ══ -->
+    <!-- ══ GLOBAL CONTROLS ══ -->
     <div class="global-controls">
         <div class="lang-picker">
             <button onclick="switchLanguage('en')" data-lang="en" title="English">EN</button>
             <button onclick="switchLanguage('fr')" data-lang="fr" title="Français">FR</button>
-            <button onclick="switchLanguage('ar')" data-lang="ar" title="العربية">AR</button>
+            <button onclick="switchLanguage('ar')" data-lang="ar" title="العربية">ع</button>
         </div>
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
-            <span class="theme-icon theme-icon-light">☀️</span>
-            <span class="theme-icon theme-icon-dark">🌙</span>
+            <span class="theme-icon theme-icon-light">🌙</span>
+            <span class="theme-icon theme-icon-dark">☀️</span>
         </button>
     </div>
 
     <div class="home-wrapper">
         <div class="home-container">
-            <!-- Logo -->
             <div class="logo-container">
                 <img src="/static/logo.png" alt="RendezVousDZ Logo">
             </div>
-
-            <!-- Main Content -->
             <div class="home-content">
-                <h1 class="home-title">Welcome to RendezVousDZ</h1>
-                <p class="home-subtitle">Professional Digital Queue Management System</p>
-                
+                <h1 class="home-title" data-i18n="welcomeTitle">Welcome to RendezVousDZ</h1>
+                <p class="home-subtitle" data-i18n="welcomeSub">Professional Digital Queue Management System</p>
                 <div class="home-actions">
-                    <a href="/register" class="btn btn-primary">
-                        Get Started
-                    </a>
-                    <a href="/login" class="btn btn-outline">
-                        Sign In
-                    </a>
+                    <a href="/register" class="btn btn-primary" data-i18n="getStarted">Get Started</a>
+                    <a href="/login" class="btn btn-outline" data-i18n="signIn">Sign In</a>
                 </div>
             </div>
-
-            <!-- Features Section -->
             <div class="features-section">
                 <div class="features-grid">
                     <div class="feature-card animate-fadeIn">
                         <div class="feature-icon">⚡</div>
-                        <h3 class="feature-title">Fast & Efficient</h3>
-                        <p class="feature-description">Streamline your customer flow with real-time queue management</p>
+                        <h3 class="feature-title" data-i18n="featFastTitle">Fast & Efficient</h3>
+                        <p class="feature-description" data-i18n="featFastDesc">Streamline your customer flow with real-time queue management</p>
                     </div>
-                    
                     <div class="feature-card animate-fadeIn">
                         <div class="feature-icon">📱</div>
-                        <h3 class="feature-title">Easy to Use</h3>
-                        <p class="feature-description">Intuitive interface designed for seamless user experience</p>
+                        <h3 class="feature-title" data-i18n="featEasyTitle">Easy to Use</h3>
+                        <p class="feature-description" data-i18n="featEasyDesc">Intuitive interface designed for seamless user experience</p>
                     </div>
-                    
                     <div class="feature-card animate-fadeIn">
                         <div class="feature-icon">🔒</div>
-                        <h3 class="feature-title">Secure & Reliable</h3>
-                        <p class="feature-description">Your data is protected with enterprise-grade security</p>
+                        <h3 class="feature-title" data-i18n="featSecureTitle">Secure & Reliable</h3>
+                        <p class="feature-description" data-i18n="featSecureDesc">Your data is protected with enterprise-grade security</p>
                     </div>
                 </div>
             </div>

@@ -5,40 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Business Settings - RendezVousDZ">
     <title>Settings - RendezVousDZ</title>
-    
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="/static/auth.css">
     <link rel="icon" type="image/png" href="/static/logo.png">
 </head>
 <body>
 
-    <!-- ══ GLOBAL CONTROLS (theme + language) ══ -->
+    <!-- ══ GLOBAL CONTROLS ══ -->
     <div class="global-controls">
         <div class="lang-picker">
             <button onclick="switchLanguage('en')" data-lang="en" title="English">EN</button>
             <button onclick="switchLanguage('fr')" data-lang="fr" title="Français">FR</button>
-            <button onclick="switchLanguage('ar')" data-lang="ar" title="العربية">AR</button>
+            <button onclick="switchLanguage('ar')" data-lang="ar" title="العربية">ع</button>
         </div>
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
-            <span class="theme-icon theme-icon-light">☀️</span>
-            <span class="theme-icon theme-icon-dark">🌙</span>
+            <span class="theme-icon theme-icon-light">🌙</span>
+            <span class="theme-icon theme-icon-dark">☀️</span>
         </button>
     </div>
 
     <div class="auth-wrapper">
-        <div class="auth-container" style="max-width: 560px;">
-
+        <div class="auth-container" style="max-width:560px;">
             <div class="auth-card">
                 <div class="auth-header">
                     <img src="/static/logo.png" alt="RendezVousDZ" class="auth-logo">
-                    <h1 class="auth-title">Business Settings</h1>
-                    <p class="auth-subtitle">Update your business information</p>
+                    <h1 class="auth-title" data-i18n="businessSettings">Business Settings</h1>
+                    <p class="auth-subtitle" data-i18n="businessSettingsSub">Update your business information</p>
                 </div>
 
                 {% if success %}
-                <div class="auth-success">
-                    ✅ Settings saved successfully!
-                </div>
+                <div class="auth-success" data-i18n="settingsSaved">✅ Settings saved successfully!</div>
                 {% endif %}
 
                 {% if error %}
@@ -46,67 +42,56 @@
                 {% endif %}
 
                 <form method="POST" action="/settings" class="auth-form">
-
-                    <div class="settings-section-label">🏢 Business Info</div>
+                    <div class="settings-section-label" data-i18n="businessInfo">🏢 Business Info</div>
 
                     <div class="form-field">
-                        <label for="name">Business Name</label>
+                        <label for="name" data-i18n="businessName">Business Name</label>
                         <input type="text" id="name" name="name"
+                               data-i18n-ph="businessNamePlaceholder"
                                placeholder="e.g., Elite Barber Shop"
                                value="{{ business['name'] }}" required autofocus>
                     </div>
-
                     <div class="form-field">
-                        <label for="category">Category</label>
+                        <label for="category" data-i18n="category">Category</label>
                         <select id="category" name="category" required>
-                            <option value="">Select a category</option>
-                            <option value="barber"     {% if business['category']=='barber'     %}selected{% endif %}>Barber Shop</option>
-                            <option value="salon"      {% if business['category']=='salon'      %}selected{% endif %}>Hair Salon</option>
-                            <option value="clinic"     {% if business['category']=='clinic'     %}selected{% endif %}>Medical Clinic</option>
-                            <option value="dentist"    {% if business['category']=='dentist'    %}selected{% endif %}>Dentist</option>
-                            <option value="spa"        {% if business['category']=='spa'        %}selected{% endif %}>Spa & Wellness</option>
-                            <option value="restaurant" {% if business['category']=='restaurant' %}selected{% endif %}>Restaurant</option>
-                            <option value="other"      {% if business['category']=='other'      %}selected{% endif %}>Other</option>
+                            <option value="" data-i18n="selectCategory">Select a category</option>
+                            <option value="barber"     data-i18n="barber"      {% if business['category']=='barber'     %}selected{% endif %}>Barber Shop</option>
+                            <option value="salon"      data-i18n="salon"       {% if business['category']=='salon'      %}selected{% endif %}>Hair Salon</option>
+                            <option value="clinic"     data-i18n="clinic"      {% if business['category']=='clinic'     %}selected{% endif %}>Medical Clinic</option>
+                            <option value="dentist"    data-i18n="dentist"     {% if business['category']=='dentist'    %}selected{% endif %}>Dentist</option>
+                            <option value="spa"        data-i18n="spa"         {% if business['category']=='spa'        %}selected{% endif %}>Spa &amp; Wellness</option>
+                            <option value="restaurant" data-i18n="restaurant"  {% if business['category']=='restaurant' %}selected{% endif %}>Restaurant</option>
+                            <option value="other"      data-i18n="other"       {% if business['category']=='other'      %}selected{% endif %}>Other</option>
                         </select>
                     </div>
-
                     <div class="form-field">
-                        <label for="city">City</label>
+                        <label for="city" data-i18n="city">City</label>
                         <input type="text" id="city" name="city"
+                               data-i18n-ph="cityPlaceholder"
                                placeholder="e.g., Algiers"
                                value="{{ business['city'] }}" required>
                     </div>
-
                     <div class="form-field">
-                        <label for="max_clients">Max Clients Per Day</label>
+                        <label for="max_clients" data-i18n="maxClients">Max Clients Per Day</label>
                         <input type="number" id="max_clients" name="max_clients"
                                value="{{ business['max_clients_per_day'] }}"
                                min="1" max="500" required>
-                        <small>Changes apply to future bookings only</small>
+                        <small data-i18n="maxClientsSub">Changes apply to future bookings only</small>
                     </div>
-
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary w-full">
-                            💾 Save Settings
-                        </button>
+                        <button type="submit" class="btn btn-primary w-full" data-i18n="saveSettings">💾 Save Settings</button>
                     </div>
                 </form>
 
-                <!-- Digital Display link -->
-                <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(30,136,229,0.07); border: 1.5px solid rgba(30,136,229,0.2); border-radius: var(--radius-lg); text-align: center;">
-                    <p style="font-weight: 700; color: var(--primary-blue); margin-bottom: 0.35rem; font-size: 0.95rem;">
-                        📺 Digital Display Mode
-                    </p>
-                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-                        Put this on a tablet or TV for your waiting clients
-                    </p>
-                    <a href="/display/{{ business['id'] }}" target="_blank" class="btn btn-outline" style="font-size:0.875rem; padding:0.6rem 1.25rem;">
-                        🖥️ Open Display Screen
-                    </a>
+                <!-- Digital Display -->
+                <div style="margin-top:1.5rem;padding:1rem;background:rgba(30,136,229,0.07);border:1.5px solid rgba(30,136,229,0.2);border-radius:var(--radius-lg);text-align:center;">
+                    <p style="font-weight:700;color:var(--primary-blue);margin-bottom:0.35rem;font-size:0.95rem;" data-i18n="digitalDisplay">📺 Digital Display Mode</p>
+                    <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.75rem;" data-i18n="digitalDisplaySub">Put this on a tablet or TV for your waiting clients</p>
+                    <a href="/display/{{ business['id'] }}" target="_blank" class="btn btn-outline" style="font-size:0.875rem;padding:0.6rem 1.25rem;" data-i18n="openDisplay">🖥️ Open Display Screen</a>
                 </div>
 
                 <div class="auth-footer">
-                    <p><a href="/dashboard">← Back to Dashboard</a></p>
+                    <p><a href="/dashboard" data-i18n="backToDashboard">← Back to Dashboard</a></p>
                 </div>
             </div>
         </div>

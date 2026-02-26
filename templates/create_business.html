@@ -5,23 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Create Your Business - RendezVousDZ">
     <title>Create Business - RendezVousDZ</title>
-    
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="/static/auth.css">
     <link rel="icon" type="image/png" href="/static/logo.png">
 </head>
 <body>
 
-    <!-- ══ GLOBAL CONTROLS (theme + language) ══ -->
+    <!-- ══ GLOBAL CONTROLS ══ -->
     <div class="global-controls">
         <div class="lang-picker">
             <button onclick="switchLanguage('en')" data-lang="en" title="English">EN</button>
             <button onclick="switchLanguage('fr')" data-lang="fr" title="Français">FR</button>
-            <button onclick="switchLanguage('ar')" data-lang="ar" title="العربية">AR</button>
+            <button onclick="switchLanguage('ar')" data-lang="ar" title="العربية">ع</button>
         </div>
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
-            <span class="theme-icon theme-icon-light">☀️</span>
-            <span class="theme-icon theme-icon-dark">🌙</span>
+            <span class="theme-icon theme-icon-light">🌙</span>
+            <span class="theme-icon theme-icon-dark">☀️</span>
         </button>
     </div>
 
@@ -30,78 +29,54 @@
             <div class="auth-card">
                 <div class="auth-header">
                     <img src="/static/logo.png" alt="RendezVousDZ" class="auth-logo">
-                    <h1 class="auth-title">Create Your Business</h1>
-                    <p class="auth-subtitle">Set up your queue management system</p>
+                    <h1 class="auth-title" data-i18n="createBusiness">Create Your Business</h1>
+                    <p class="auth-subtitle" data-i18n="createBusinessSub">Set up your queue management system</p>
                 </div>
 
                 {% if error %}
-                <div class="auth-error">
-                    {{ error }}
-                </div>
+                <div class="auth-error">{{ error }}</div>
                 {% endif %}
 
                 <form method="POST" action="/create-business" class="auth-form">
                     <div class="form-field">
-                        <label for="name">Business Name</label>
-                        <input 
-                            type="text" 
-                            id="name" 
-                            name="name" 
-                            placeholder="e.g., Elite Barber Shop" 
-                            required
-                            autofocus
-                        >
+                        <label for="name" data-i18n="businessName">Business Name</label>
+                        <input type="text" id="name" name="name"
+                               data-i18n-ph="businessNamePlaceholder"
+                               placeholder="e.g., Elite Barber Shop"
+                               required autofocus>
                     </div>
-
                     <div class="form-field">
-                        <label for="category">Category</label>
+                        <label for="category" data-i18n="category">Category</label>
                         <select id="category" name="category" required>
-                            <option value="">Select a category</option>
-                            <option value="barber">Barber Shop</option>
-                            <option value="salon">Hair Salon</option>
-                            <option value="clinic">Medical Clinic</option>
-                            <option value="dentist">Dentist</option>
-                            <option value="spa">Spa & Wellness</option>
-                            <option value="restaurant">Restaurant</option>
-                            <option value="other">Other</option>
+                            <option value="" data-i18n="selectCategory">Select a category</option>
+                            <option value="barber" data-i18n="barber">Barber Shop</option>
+                            <option value="salon" data-i18n="salon">Hair Salon</option>
+                            <option value="clinic" data-i18n="clinic">Medical Clinic</option>
+                            <option value="dentist" data-i18n="dentist">Dentist</option>
+                            <option value="spa" data-i18n="spa">Spa &amp; Wellness</option>
+                            <option value="restaurant" data-i18n="restaurant">Restaurant</option>
+                            <option value="other" data-i18n="other">Other</option>
                         </select>
                     </div>
-
                     <div class="form-field">
-                        <label for="city">City</label>
-                        <input 
-                            type="text" 
-                            id="city" 
-                            name="city" 
-                            placeholder="e.g., Algiers" 
-                            required
-                        >
+                        <label for="city" data-i18n="city">City</label>
+                        <input type="text" id="city" name="city"
+                               data-i18n-ph="cityPlaceholder"
+                               placeholder="e.g., Algiers"
+                               required>
                     </div>
-
                     <div class="form-field">
-                        <label for="max_clients">Max Clients Per Day</label>
-                        <input 
-                            type="number" 
-                            id="max_clients" 
-                            name="max_clients" 
-                            value="20" 
-                            min="1" 
-                            max="100"
-                            required
-                        >
+                        <label for="max_clients" data-i18n="maxClients">Max Clients Per Day</label>
+                        <input type="number" id="max_clients" name="max_clients"
+                               value="20" min="1" max="100" required>
                     </div>
-
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary w-full">
-                            Create Business
-                        </button>
+                        <button type="submit" class="btn btn-primary w-full" data-i18n="createBusinessBtn">Create Business</button>
                     </div>
                 </form>
 
                 <div class="auth-footer">
-                    <p>
-                        <a href="/logout">Logout</a>
-                    </p>
+                    <p><a href="/logout" data-i18n="logout">Logout</a></p>
                 </div>
             </div>
         </div>

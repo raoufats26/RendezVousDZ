@@ -5,28 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Dashboard - RendezVousDZ Queue Management">
     <title>Dashboard - RendezVousDZ</title>
-    
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="/static/dashboard.css">
     <link rel="icon" type="image/png" href="/static/logo.png">
 </head>
 <body>
 
-    <!-- ══ GLOBAL CONTROLS (theme + language) ══ -->
+    <!-- ══ GLOBAL CONTROLS ══ -->
     <div class="global-controls">
         <div class="lang-picker">
             <button onclick="switchLanguage('en')" data-lang="en" title="English">EN</button>
             <button onclick="switchLanguage('fr')" data-lang="fr" title="Français">FR</button>
-            <button onclick="switchLanguage('ar')" data-lang="ar" title="العربية">AR</button>
+            <button onclick="switchLanguage('ar')" data-lang="ar" title="العربية">ع</button>
         </div>
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
-            <span class="theme-icon theme-icon-light">☀️</span>
-            <span class="theme-icon theme-icon-dark">🌙</span>
+            <span class="theme-icon theme-icon-light">🌙</span>
+            <span class="theme-icon theme-icon-dark">☀️</span>
         </button>
     </div>
 
     <div class="dashboard-wrapper">
-        <!-- Dashboard Header -->
+        <!-- Header -->
         <div class="dashboard-header">
             <div class="dashboard-top">
                 <div class="dashboard-branding">
@@ -34,110 +33,94 @@
                     <div class="dashboard-info">
                         <h2>{{ business['name'] }}</h2>
                         <p class="date" id="currentDate"></p>
-                        <p style="font-size: 0.875rem; color: var(--mid-gray); margin-top: 0.25rem;">
+                        <p style="font-size:0.875rem;color:var(--mid-gray);margin-top:0.25rem;">
                             {{ business['category']|title }} • {{ business['city'] }}
                         </p>
                         {% if today_queue %}
-                        <p style="font-size: 0.75rem; color: var(--info); margin-top: 0.25rem; font-family: var(--font-mono);">
+                        <p style="font-size:0.75rem;color:var(--info);margin-top:0.25rem;font-family:var(--font-mono);">
                             Queue Date: {{ today_queue['date'] }}
                         </p>
                         {% endif %}
                     </div>
                 </div>
-                
                 <div class="dashboard-actions">
-                    <a href="/b/{{ business['id'] }}" target="_blank" class="btn btn-secondary no-print" style="background: linear-gradient(135deg, var(--primary-orange), var(--accent-orange));">
-                        📋 Public Booking Link
-                    </a>
-                    <a href="/analytics" class="btn btn-outline no-print" style="border-color: #8B5CF6; color: #8B5CF6;">
-                        📊 Analytics
-                    </a>
-                    <a href="/settings" class="btn btn-outline no-print">
-                        ⚙️ Settings
-                    </a>
-                    <a href="/logout" class="btn btn-outline no-print">
-                        Logout
-                    </a>
+                    <a href="/b/{{ business['id'] }}" target="_blank" class="btn btn-secondary no-print"
+                       style="background:linear-gradient(135deg,var(--primary-orange),var(--accent-orange));"
+                       data-i18n="publicLink">📋 Public Booking Link</a>
+                    <a href="/analytics" class="btn btn-outline no-print"
+                       style="border-color:#8B5CF6;color:#8B5CF6;"
+                       data-i18n="analytics">📊 Analytics</a>
+                    <a href="/settings" class="btn btn-outline no-print" data-i18n="settings">⚙️ Settings</a>
+                    <a href="/logout" class="btn btn-outline no-print" data-i18n="logout">Logout</a>
                 </div>
             </div>
         </div>
 
-        <!-- Error Message -->
         {% if error %}
-        <div class="error-message" style="margin-bottom: var(--space-lg);">
-            {{ error }}
-        </div>
+        <div class="error-message" style="margin-bottom:var(--space-lg);">{{ error }}</div>
         {% endif %}
 
-        <!-- Stats Grid -->
+        <!-- Stats -->
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-content">
-                    <div class="stat-label">Current Queue</div>
+                    <div class="stat-label" data-i18n="currentQueue">Current Queue</div>
                     <div class="stat-value">{{ current_count }}</div>
                 </div>
             </div>
-            
             <div class="stat-card">
                 <div class="stat-content">
-                    <div class="stat-label">Daily Limit</div>
+                    <div class="stat-label" data-i18n="dailyLimit">Daily Limit</div>
                     <div class="stat-value">{{ max_clients }}</div>
                 </div>
             </div>
-            
             <div class="stat-card">
                 <div class="stat-content">
-                    <div class="stat-label">Remaining Slots</div>
-                    <div class="stat-value" style="color: {% if queue_full %}var(--error){% else %}var(--success){% endif %};">
+                    <div class="stat-label" data-i18n="remainingSlots">Remaining Slots</div>
+                    <div class="stat-value" style="color:{% if queue_full %}var(--error){% else %}var(--success){% endif %};">
                         {{ max_clients - current_count }}
                     </div>
                 </div>
             </div>
-            
             <div class="stat-card">
                 <div class="stat-content">
-                    <div class="stat-label">⏱️ Avg Service Time</div>
-                    <div class="stat-value" style="color: var(--info);">
-                        {{ avg_service_time }}<span style="font-size: 1rem; margin-left: 0.25rem;">min</span>
+                    <div class="stat-label" data-i18n="avgServiceTime">⏱️ Avg Service Time</div>
+                    <div class="stat-value" style="color:var(--info);">
+                        {{ avg_service_time }}<span style="font-size:1rem;margin-left:0.25rem;" data-i18n="min">min</span>
                     </div>
-                    <div style="font-size: 0.75rem; color: var(--mid-gray); margin-top: var(--space-xs);">
+                    <div style="font-size:0.75rem;color:var(--mid-gray);margin-top:var(--space-xs);" data-i18n="basedOnData">
                         Based on recent data
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Queue Status Alert -->
         {% if queue_full %}
-        <div style="background: rgba(239, 68, 68, 0.1); border: 2px solid var(--error); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-xl); text-align: center;">
-            <p style="color: var(--error); font-weight: 700; font-size: 1.125rem; margin: 0;">
+        <div style="background:rgba(239,68,68,0.1);border:2px solid var(--error);border-radius:var(--radius-lg);padding:var(--space-lg);margin-bottom:var(--space-xl);text-align:center;">
+            <p style="color:var(--error);font-weight:700;font-size:1.125rem;margin:0;" data-i18n="queueFullAlert">
                 ⚠️ Queue Full - Daily limit reached ({{ max_clients }}/{{ max_clients }})
             </p>
         </div>
         {% endif %}
 
-        <!-- Add Client Form -->
+        <!-- Add Client -->
         <div class="queue-form-section">
-            <h3>Add Client to Queue</h3>
+            <h3 data-i18n="addClientTitle">Add Client to Queue</h3>
             <form action="/add-client" method="POST" class="queue-form">
                 <div class="form-field">
-                    <input 
-                        type="text" 
-                        name="client_name" 
-                        placeholder="Client Name" 
-                        required
-                        {% if queue_full %}disabled{% endif %}
-                    >
+                    <input type="text" name="client_name"
+                           data-i18n-ph="clientNamePlaceholder"
+                           placeholder="Client Name"
+                           required {% if queue_full %}disabled{% endif %}>
                 </div>
                 <div class="form-field">
-                    <input 
-                        type="tel" 
-                        name="client_phone" 
-                        placeholder="Phone (Optional)"
-                        {% if queue_full %}disabled{% endif %}
-                    >
+                    <input type="tel" name="client_phone"
+                           data-i18n-ph="phonePlaceholder"
+                           placeholder="Phone (Optional)"
+                           {% if queue_full %}disabled{% endif %}>
                 </div>
-                <button type="submit" class="btn btn-primary" {% if queue_full %}disabled{% endif %}>
+                <button type="submit" class="btn btn-primary" {% if queue_full %}disabled{% endif %}
+                        data-i18n="{% if queue_full %}queueFull{% else %}addToQueue{% endif %}">
                     {% if queue_full %}Queue Full{% else %}Add to Queue{% endif %}
                 </button>
             </form>
@@ -146,7 +129,7 @@
         <!-- Queue List -->
         <div class="queue-section">
             <div class="queue-header">
-                <h3>Today's Queue</h3>
+                <h3 data-i18n="todaysQueue">Today's Queue</h3>
                 <div class="queue-count">{{ current_count }}/{{ max_clients }}</div>
             </div>
 
@@ -155,29 +138,19 @@
                 {% for entry in queue_entries %}
                 <div class="queue-item">
                     <div class="queue-number">#{{ loop.index }}</div>
-                    
                     <div class="queue-details">
                         <div class="queue-name">{{ entry['client_name'] }}</div>
                         <div class="queue-meta">
-                            <span class="queue-status status-{{ entry['status'] }}">
-                                {{ entry['status']|title }}
-                            </span>
+                            <span class="queue-status status-{{ entry['status'] }}">{{ entry['status']|title }}</span>
                             {% if entry['client_phone'] %}
-                            <span class="queue-time">
-                                📞 {{ entry['client_phone'] }}
-                            </span>
+                            <span class="queue-time">📞 {{ entry['client_phone'] }}</span>
                             {% endif %}
                         </div>
                     </div>
-                    
                     <div class="queue-actions">
                         {% if entry['status'] == 'waiting' %}
-                        <a href="/mark-done/{{ entry['id'] }}" class="btn btn-success">
-                            Mark Done
-                        </a>
-                        <a href="/mark-skipped/{{ entry['id'] }}" class="btn btn-ghost">
-                            Skip
-                        </a>
+                        <a href="/mark-done/{{ entry['id'] }}" class="btn btn-success" data-i18n="markDone">Mark Done</a>
+                        <a href="/mark-skipped/{{ entry['id'] }}" class="btn btn-ghost" data-i18n="skip">Skip</a>
                         {% endif %}
                     </div>
                 </div>
@@ -186,25 +159,26 @@
             {% else %}
             <div class="empty-state">
                 <div class="empty-state-icon">📋</div>
-                <h4>No clients in queue</h4>
-                <p>Add a client above to get started</p>
+                <h4 data-i18n="noClients">No clients in queue</h4>
+                <p data-i18n="addClientHint">Add a client above to get started</p>
             </div>
             {% endif %}
         </div>
 
-        <!-- Footer -->
         <div class="dashboard-footer">
-            <p>RendezVousDZ &copy; 2026 - Professional Queue Management System</p>
+            <p data-i18n="footer">RendezVousDZ © 2026 - Professional Queue Management System</p>
         </div>
     </div>
 
     <script src="/static/main.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const dateElement = document.getElementById('currentDate');
-            if (dateElement) {
-                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-                dateElement.textContent = new Date().toLocaleDateString('en-US', options);
+            const dateEl = document.getElementById('currentDate');
+            if (dateEl) {
+                const opts = { weekday:'long', year:'numeric', month:'long', day:'numeric' };
+                const lang = localStorage.getItem('rvdz_lang') || 'en';
+                const locale = lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-US';
+                dateEl.textContent = new Date().toLocaleDateString(locale, opts);
             }
         });
     </script>
