@@ -19,23 +19,34 @@ This is a production-intended queue management platform for small businesses (ba
 =================================================
 🎯 PRODUCT OVERVIEW
 =================================================
-RENDEZVOUSDZ is a smart queue management system.
+RENDEZVOUSDZ is a smart queue management system for small Algerian businesses.
 
 Actors:
 1. Business Owner (authenticated)
 2. Public Client (no login)
 
 Core Features Completed:
-- Authentication system
+- Authentication system (register, login, logout)
+- Email verification on register
+- Forgot password / Reset password (token-based, hashed)
 - Business creation (1 business per owner)
 - Daily queue logic (1 queue per day per business)
-- Walk-in client support (owner adds manually)
-- Public booking page (/b/<business_id>)
+- Walk-in client support (owner adds manually from dashboard)
+- Public booking page (/b/<business_id>) — clients join themselves
 - Daily client limit enforcement
-- Status management (waiting / done / skipped)
+- Status management: waiting / done / skipped
 - Validation and duplicate protection
 - Real-time queue updates using Flask-SocketIO
-- Business settings page
+- Business settings page (name, category, city, max clients)
+- Analytics page (/analytics) with Chart.js charts
+- Digital Display Mode (/display/<business_id>) — fullscreen TV/tablet view
+- Average service time calculation
+- Estimated wait time on public booking page
+- Dark mode (persisted via localStorage key: rvdz_theme)
+- Language switcher: EN / FR / AR (persisted via localStorage key: rvdz_lang)
+  - Arabic triggers RTL layout
+  - All UI strings translated via data-i18n attributes + TRANSLATIONS object in main.js
+  - switchLanguage(lang) and toggleTheme() are global functions
 
 =================================================
 🧱 ARCHITECTURE STRUCTURE
@@ -47,6 +58,8 @@ app.py
 routes/
     auth.py
     booking.py
+    analytics.py
+    display.py
 database/
     db.py
     init_db.py
@@ -55,15 +68,22 @@ templates/
     home.html
     login.html
     register.html
+    forgot_password.html
+    reset_password.html
     dashboard.html
     create_business.html
     public_booking.html
     settings.html
+    analytics.html
+    display.html
 static/
-    style.css
+    style.css          ← global tokens, dark mode, .global-controls widget CSS
     dashboard.css
     auth.css
-    main.js
+    home.css
+    analytics.css
+    display.css
+    main.js            ← ALL JS: theme, language, socket.io, animations, validation
 
 =================================================
 ⚙️ BACKEND ARCHITECTURE DETAILS
@@ -71,84 +91,128 @@ static/
 
 app.py:
 - Initializes Flask
-- Initializes Flask-SocketIO
-- Registers blueprints
-- Handles socket events:
-    - connect
-    - disconnect
-    - join (room = business_<id>)
-
-SocketIO runs using:
-socketio.run(app)
+- Initializes Flask-SocketIO (async_mode='threading')
+- Registers blueprints: auth_bp, booking_bp, analytics_bp, display_bp
+- Socket events: connect, disconnect, join (room = business_<id>)
+- Flask-Mail configured via env vars (optional, graceful fallback)
+- Rate limiting via Flask-Limiter
+- i18n shim: _() function passed to Jinja globals
 
 routes/auth.py:
-- Login
-- Register
-- Session management
+- /register (POST) — creates user, sends verification email
+- /login (POST) — checks verified flag
+- /logout
+- /verify/<token> — email verification
+- /forgot-password (POST) — sends reset email
+- /reset-password/<token> (GET/POST) — token hashed with SHA-256, expires 1h
 
 routes/booking.py:
-Handles:
-- /dashboard
-- /create-business
-- /settings
-- /add-client (walk-in)
-- /mark-done/<id>
-- /mark-skipped/<id>
-- /b/<business_id> (public booking)
+- /dashboard — owner's main view
+- /create-business — one-time setup
+- /settings (GET/POST) — update business info
+- /add-client (POST) — walk-in, emits queue_updated
+- /mark-done/<id> — emits queue_updated
+- /mark-skipped/<id> — emits queue_updated
+- /b/<business_id> (GET/POST) — public booking, emits queue_updated
 
 Real-time logic:
-emit_queue_update(business_id, queue_id)
-Emits:
-'queue_updated'
-Room:
-business_<business_id>
+    emit_queue_update(business_id, queue_id)
+    Emits 'queue_updated' to room: business_<business_id>
+    Payload includes: queue_entries, current_count, max_clients, queue_full
+
+routes/analytics.py:
+- /analytics — renders analytics.html with chart data
+- /analytics/api — JSON endpoint for future live refresh
+- get_analytics_data(business_id) — queries: daily counts (7d), peak hours (30d),
+  weekly performance (4w), summary stats, busiest day of week
+
+routes/display.py:
+- /display/<business_id> — public fullscreen display (no login)
+  Renders display.html with entries + lang from business settings
+  Updates via SocketIO (same room as dashboard)
 
 =================================================
 🗄️ DATABASE STRUCTURE
 =================================================
 
 users:
-- id
-- email
-- password_hash
-- verified
-- created_at
+- id, email, password_hash, verified (0/1), created_at
+
+email_tokens:
+- user_id, token
+
+password_reset_tokens:
+- user_id, token_hash (SHA-256), expires_at
 
 businesses:
-- id
-- user_id
-- name
-- category
-- city
-- max_clients_per_day
+- id, user_id, name, category, city, max_clients_per_day, language
 
 daily_queues:
-- id
-- business_id
-- date
+- id, business_id, date
 
 queue_entries:
-- id
-- daily_queue_id
-- client_name
-- client_phone
-- status (waiting / done / skipped)
+- id, daily_queue_id, client_name, client_phone
+- status: 'waiting' | 'done' | 'skipped'
 - created_at
 
 =================================================
 🔄 REAL-TIME ARCHITECTURE
 =================================================
 
-1. Client connects via SocketIO
-2. Client emits:
-   'join' with business_id
-3. Server joins room:
-   business_<id>
-4. On queue change:
-   emit_queue_update()
-5. Frontend updates DOM dynamically
+1. Client/owner browser connects via Socket.IO
+2. Emits 'join' with { business_id }
+3. Server joins room: business_<id>
+4. On any queue change (add/done/skip/public booking):
+   emit_queue_update() fires
+5. All connected clients (dashboard + display page) update DOM live
 
-Real-time works and must NOT be broken.
+Real-time MUST NOT be broken. Do not touch emit logic unless explicitly asked.
+
+=================================================
+🎨 FRONTEND ARCHITECTURE
+=================================================
+
+All JS lives in static/main.js:
+- Theme system: _applyTheme(theme), toggleTheme() → window.toggleTheme
+  Saves to localStorage key 'rvdz_theme'
+  Applied immediately on script load (before DOMContentLoaded) to prevent FOUC
+  Swaps logo: auth-logo / dashboard-logo → logo_white.png (dark) or logo_blue.png (light)
+
+- Language system: _applyLanguage(lang), switchLanguage(lang) → window.switchLanguage
+  Saves to localStorage key 'rvdz_lang'
+  Supported: 'en', 'fr', 'ar'
+  Arabic sets dir="rtl" on <html>
+  Translates all [data-i18n="key"] elements on the page
+  Translates placeholders via [data-i18n-ph="key"]
+  Marks active lang button via class 'lang-active' on .lang-picker buttons
+
+- TRANSLATIONS object in main.js: contains all string keys for en/fr/ar
+
+- Real-time: Socket.IO loaded dynamically, joins room, listens for 'queue_updated'
+
+All templates include ONE .global-controls div (top-right fixed):
+    <div class="global-controls">
+        <div class="lang-picker">
+            <button onclick="switchLanguage('en')" data-lang="en">EN</button>
+            <button onclick="switchLanguage('fr')" data-lang="fr">FR</button>
+            <button onclick="switchLanguage('ar')" data-lang="ar">ع</button>
+        </div>
+        <button class="theme-toggle" onclick="toggleTheme()">
+            <span class="theme-icon theme-icon-light">🌙</span>
+            <span class="theme-icon theme-icon-dark">☀️</span>
+        </button>
+    </div>
+
+CSS for .global-controls lives at the bottom of static/style.css.
+display.html does NOT have global-controls (fullscreen TV mode).
+
+=================================================
+🖼️ STATIC ASSETS
+=================================================
+
+static/logo.png         — main logo (dark background)
+static/logo_blue.png    — used in light mode for auth/dashboard pages
+static/logo_white.png   — used in dark mode for auth/dashboard pages
 
 =================================================
 🧠 DESIGN PRINCIPLES
@@ -159,37 +223,45 @@ Real-time works and must NOT be broken.
 - No overengineering
 - No unnecessary abstraction
 - Clean separation of concerns
-- Business logic stays in db.py and routes
+- Business logic stays in db.py and routes/
 - Templates stay mostly presentational
+- No new frameworks — Flask + vanilla JS only
 
 =================================================
 🎯 CURRENT STATE
 =================================================
 
-The platform is stable after Phase 14 (Real-time updates).
-We are now extending functionality carefully.
+Platform is stable after:
+- Phase 14: Real-time updates (SocketIO)
+- Phase 15: Estimated wait time
+- Phase 16: Analytics + Digital Display Mode
+- Phase 17: Dark mode + Language switcher (EN/FR/AR with full data-i18n coverage)
 
-No deployment yet.
-No Docker yet.
-No monetization yet.
+Not yet deployed.
+No Docker.
+No monetization.
+SQLite database (single file).
 
 =================================================
-🛑 IMPORTANT
+🛑 IMPORTANT — BEFORE MAKING ANY CHANGE
 =================================================
 
-If adding a new feature:
 - Do not touch unrelated routes.
-- Do not rewrite existing queries.
+- Do not rewrite existing SQL queries.
 - Do not introduce breaking schema changes.
-- Always add safe migrations if DB changes are needed.
+  If DB schema changes are needed → provide a safe ALTER TABLE migration.
+- Do not add new npm/pip packages without stating why.
+- Do not modify main.js theme/language system unless that is the explicit request.
+- Do not add a second .global-controls widget — one per template already exists.
 
 =================================================
 📤 OUTPUT FORMAT REQUIRED
 =================================================
 
-When implementing a new phase:
-- Provide baby steps.
-- Show file-by-file modifications.
-- Provide exact code blocks.
-- Explain briefly why each change exists.
-- Keep changes minimal and reversible.
+When implementing a new phase or feature:
+1. State which files will be modified and why.
+2. Show the exact code block for each file change.
+3. If it's a partial edit, show only the changed section with clear context.
+4. Explain briefly (1–2 lines) why each change exists.
+5. Keep changes minimal and reversible.
+6. If a DB migration is needed, provide the exact SQL.
