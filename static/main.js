@@ -18,9 +18,20 @@ function _applyTheme(theme) {
         if (di) di.style.display  = theme === 'dark' ? ''     : 'none';
     });
 
-    // Swap logos
-    document.querySelectorAll('img.auth-logo, img.dashboard-logo').forEach(img => {
-        img.src = theme === 'dark' ? '/static/logo_white.png' : '/static/logo_blue.png';
+    // ✅ FIXED LOGO HANDLING (auth + dashboard + home)
+    document.querySelectorAll('img.auth-logo, img.dashboard-logo, img.home-logo').forEach(img => {
+        const newSrc = theme === 'dark'
+            ? '/static/logo_white.png'
+            : '/static/logo_blue.png';
+
+        if (img.getAttribute('src') !== newSrc) {
+            img.src = newSrc;
+        }
+
+        // Fallback safety if image fails to load
+        img.onerror = function () {
+            this.src = '/static/logo_blue.png';
+        };
     });
 
     // Rebuild analytics charts if present

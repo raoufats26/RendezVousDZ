@@ -268,15 +268,12 @@ def get_average_service_time(business_id, sample_size=20):
                 gap_minutes = (t_curr - t_prev).total_seconds() / 60.0
 
                 # Sanity check: service gap must be between 1 min and 2 hours
-                # Gaps > 120 min likely mean idle time between customers, not service time
                 if 1.0 <= gap_minutes <= 120.0:
                     gaps.append(gap_minutes)
             except Exception:
                 continue
 
     if not gaps:
-        # No valid gaps found — fall back to created_at → completed_at
-        # but only if the durations are plausible (capped at 60 min)
         conn2 = get_db()
         fallback_rows = conn2.execute("""
             SELECT qe.created_at, qe.completed_at
@@ -296,7 +293,6 @@ def get_average_service_time(business_id, sample_size=20):
                 created   = datetime.fromisoformat(row['created_at'])
                 completed = datetime.fromisoformat(row['completed_at'])
                 dur = (completed - created).total_seconds() / 60.0
-                # For the fallback keep it tight: 1–45 min is credible service time
                 if 1.0 <= dur <= 45.0:
                     durations.append(dur)
             except Exception:
@@ -315,48 +311,26 @@ def get_average_service_time(business_id, sample_size=20):
 def estimate_wait_time(daily_queue_id, position, business_id):
     """
     Estimate wait time for a client at a given position in the queue.
-
-    Args:
-        daily_queue_id: The daily queue ID
-        position: Client's position in queue (1-based: position 1 = first)
-        business_id: The business ID
-
-    Returns:
-        Estimated wait time in minutes (integer)
     """
     avg_service_time = get_average_service_time(business_id)
-
-    # People ahead = position - 1
-    # Position 1 means you ARE first (no one ahead) → 0 wait
     people_ahead = position - 1
-
     if people_ahead <= 0:
         return 0
-
     return people_ahead * avg_service_time
 
 
 def mark_entry_completed(entry_id):
     """
     Mark a queue entry as completed and record completion timestamp.
-
-    Args:
-        entry_id: The queue entry ID
-
-    Returns:
-        True if successful, False otherwise
     """
     conn = get_db()
-
     try:
         current_time = datetime.now().isoformat()
-
         conn.execute("""
             UPDATE queue_entries
             SET status = 'completed', completed_at = ?
             WHERE id = ?
         """, (current_time, entry_id))
-
         conn.commit()
         conn.close()
         return True
@@ -370,29 +344,164 @@ def get_queue_position(daily_queue_id, entry_id):
     """
     Get the position of a specific entry in the queue (1-based).
     Only counts 'waiting' entries.
-
-    Args:
-        daily_queue_id: The daily queue ID
-        entry_id: The specific entry ID
-
-    Returns:
-        Position number (1-based), or None if not found
     """
     conn = get_db()
-
-    # Get all waiting entries ordered by creation time
     waiting_entries = conn.execute("""
         SELECT id
         FROM queue_entries
         WHERE daily_queue_id = ? AND status = 'waiting'
         ORDER BY created_at ASC
     """, (daily_queue_id,)).fetchall()
-
     conn.close()
 
-    # Find position
     for index, entry in enumerate(waiting_entries):
         if entry['id'] == entry_id:
-            return index + 1  # 1-based position
+            return index + 1
 
     return None
+
+
+# ============================================================
+# PHASE 18: ANTI-SPAM & SMART PROTECTION
+# ============================================================
+
+# Config — tweak these to adjust protection aggressiveness
+BOOKING_COOLDOWN_MINUTES = 30   # same IP can't book again within this window
+NOSHOW_TIMEOUT_MINUTES   = 45   # waiting entries older than this get auto-cancelled
+
+
+def log_booking(business_id, queue_date, client_ip, client_phone):
+    """
+    Record a new public booking in booking_log.
+    Used to enforce IP cooldown and detect abuse patterns.
+    """
+    conn = get_db()
+    try:
+        conn.execute(
+            """INSERT INTO booking_log (business_id, queue_date, client_ip, client_phone)
+               VALUES (?, ?, ?, ?)""",
+            (business_id, queue_date, client_ip, client_phone)
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[booking_log] Warning: could not log booking — {e}")
+    finally:
+        conn.close()
+
+
+def check_ip_cooldown(business_id, queue_date, client_ip, cooldown_minutes=None):
+    """
+    Returns (blocked: bool, minutes_remaining: int).
+    Blocks the same IP from booking the same business more than once
+    within BOOKING_COOLDOWN_MINUTES on the same day.
+
+    Owners adding walk-in clients via the dashboard bypass this —
+    it only applies to the public /b/<id> route.
+    """
+    if not client_ip:
+        return False, 0
+
+    minutes = cooldown_minutes if cooldown_minutes is not None else BOOKING_COOLDOWN_MINUTES
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            """
+            SELECT booked_at FROM booking_log
+            WHERE business_id = ?
+              AND queue_date   = ?
+              AND client_ip    = ?
+            ORDER BY booked_at DESC
+            LIMIT 1
+            """,
+            (business_id, queue_date, client_ip)
+        ).fetchone()
+    except Exception:
+        # booking_log table missing — migration not yet run, allow booking
+        conn.close()
+        return False, 0
+    finally:
+        conn.close()
+
+    if not row:
+        return False, 0
+
+    try:
+        last_booked = datetime.fromisoformat(row["booked_at"])
+        elapsed     = (datetime.utcnow() - last_booked).total_seconds() / 60.0
+        if elapsed < minutes:
+            remaining = int(minutes - elapsed) + 1
+            return True, remaining
+    except Exception:
+        pass
+
+    return False, 0
+
+
+def cancel_noshow_entries(business_id, timeout_minutes=None):
+    """
+    Auto-cancel (mark as 'skipped') waiting entries that have been
+    waiting longer than NOSHOW_TIMEOUT_MINUTES without being served.
+
+    Returns the number of entries cancelled.
+
+    Call this at the start of the public_booking GET request so the
+    queue is always cleaned up when someone visits the page.
+    """
+    minutes = timeout_minutes if timeout_minutes is not None else NOSHOW_TIMEOUT_MINUTES
+
+    conn = get_db()
+    try:
+        # Find waiting entries older than timeout for this business
+        result = conn.execute(
+            """
+            UPDATE queue_entries
+            SET status = 'skipped'
+            WHERE status = 'waiting'
+              AND daily_queue_id IN (
+                  SELECT id FROM daily_queues
+                  WHERE business_id = ? AND date = date('now')
+              )
+              AND (
+                  -- created more than N minutes ago
+                  (strftime('%s', 'now') - strftime('%s', created_at)) / 60 > ?
+              )
+            """,
+            (business_id, minutes)
+        )
+        cancelled = result.rowcount
+        conn.commit()
+        return cancelled
+    except Exception as e:
+        print(f"[cancel_noshow] Warning: {e}")
+        return 0
+    finally:
+        conn.close()
+
+
+def check_daily_ip_limit(business_id, queue_date, client_ip, max_per_day=2):
+    """
+    Prevent the same IP from booking more than max_per_day slots per day
+    for the same business (handles households / shared IPs generously with 2).
+
+    Returns True if limit is exceeded, False otherwise.
+    """
+    if not client_ip:
+        return False
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) as cnt FROM booking_log
+            WHERE business_id = ?
+              AND queue_date   = ?
+              AND client_ip    = ?
+            """,
+            (business_id, queue_date, client_ip)
+        ).fetchone()
+        return (row["cnt"] if row else 0) >= max_per_day
+    except Exception:
+        return False
+    finally:
+        conn.close()

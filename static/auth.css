@@ -279,3 +279,16 @@
     .auth-title { font-size: 1.375rem; }
     .auth-form  { gap: var(--space-md); }
 }
+/* Fix logo vertical shift between light/dark */
+.logo-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.home-logo {
+    height: 80px;          /* lock height */
+    width: auto;
+    display: block;
+    object-fit: contain;
+}

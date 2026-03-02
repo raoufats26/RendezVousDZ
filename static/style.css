@@ -637,3 +637,16 @@ hr {
     .lang-picker button { padding: 0.25rem 0.45rem; font-size: 0.68rem; }
     .theme-toggle { padding: 0.3rem 0.55rem; font-size: 0.9rem; }
 }
+/* Fix logo vertical shift between light/dark */
+.logo-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.home-logo {
+    height: 80px;          /* lock height */
+    width: auto;
+    display: block;
+    object-fit: contain;
+}

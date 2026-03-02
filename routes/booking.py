@@ -1,10 +1,10 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for, current_app
 from database.db import (
-    get_db, 
-    get_business_by_user, 
+    get_db,
+    get_business_by_user,
     create_business,
     update_business,
-    get_today_queue, 
+    get_today_queue,
     create_today_queue,
     count_entries_for_queue,
     is_queue_full,
@@ -17,7 +17,12 @@ from database.db import (
     mark_entry_completed,
     get_average_service_time,
     estimate_wait_time,
-    get_queue_position
+    get_queue_position,
+    # PHASE 18: Anti-spam imports
+    log_booking,
+    check_ip_cooldown,
+    cancel_noshow_entries,
+    check_daily_ip_limit,
 )
 
 booking_bp = Blueprint("booking", __name__)
@@ -32,6 +37,17 @@ def row_get(row, key, default=None):
         return val if val is not None else default
     except (IndexError, KeyError):
         return default
+
+
+# ──────────────────────────────────────────────────────────────
+# HELPER: get real client IP (handles reverse proxy)
+# ──────────────────────────────────────────────────────────────
+def get_client_ip():
+    """Return the real client IP, respecting X-Forwarded-For if present."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.remote_addr
 
 
 # ──────────────────────────────────────────────────────────────
@@ -88,10 +104,10 @@ def dashboard():
         create_today_queue(business_id)
         today_queue = get_today_queue(business_id)
 
-    queue_entries  = get_queue_entries(today_queue["id"])
-    current_count  = count_entries_for_queue(today_queue["id"])
-    max_clients    = business["max_clients_per_day"]
-    queue_full     = is_queue_full(today_queue["id"], max_clients)
+    queue_entries    = get_queue_entries(today_queue["id"])
+    current_count    = count_entries_for_queue(today_queue["id"])
+    max_clients      = business["max_clients_per_day"]
+    queue_full       = is_queue_full(today_queue["id"], max_clients)
     avg_service_time = get_average_service_time(business_id)  # PHASE 15
 
     return render_template(
@@ -367,7 +383,10 @@ def mark_skipped(entry_id):
 
 @booking_bp.route("/b/<int:business_id>", methods=["GET", "POST"])
 def public_booking(business_id):
-    """Public booking page for customers"""
+    """
+    Public booking page for customers.
+    PHASE 18: IP cooldown + daily IP limit + no-show auto-cancel.
+    """
 
     if business_id <= 0:
         return render_template("public_booking.html", error="Invalid business ID", business=None)
@@ -393,11 +412,39 @@ def public_booking(business_id):
                                max_clients=business["max_clients_per_day"],
                                queue_full=False)
 
+    # ── PHASE 18: Auto-cancel no-shows on every GET ──────────────
+    if request.method == "GET":
+        cancelled = cancel_noshow_entries(business_id)
+        if cancelled > 0:
+            print(f"[Phase 18] Auto-cancelled {cancelled} no-show(s) for business {business_id}")
+            # Emit update so dashboard/display reflect the cleanup
+            emit_queue_update(business_id, today_queue["id"])
+
     current_count = count_entries_for_queue(today_queue["id"])
     max_clients   = business["max_clients_per_day"]
     queue_full    = is_queue_full(today_queue["id"], max_clients)
 
+    from datetime import date as _date
+    today_str  = _date.today().isoformat()
+    client_ip  = get_client_ip()
+
     if request.method == "POST":
+
+        # ── PHASE 18: IP daily limit ─────────────────────────────
+        if check_daily_ip_limit(business_id, today_str, client_ip):
+            return render_template("public_booking.html", business=business,
+                                   current_count=current_count, max_clients=max_clients,
+                                   queue_full=queue_full,
+                                   error="You have already booked the maximum number of slots today from this device.")
+
+        # ── PHASE 18: IP cooldown ────────────────────────────────
+        blocked, minutes_left = check_ip_cooldown(business_id, today_str, client_ip)
+        if blocked:
+            return render_template("public_booking.html", business=business,
+                                   current_count=current_count, max_clients=max_clients,
+                                   queue_full=queue_full,
+                                   error=f"Please wait {minutes_left} more minute(s) before booking again.")
+
         client_name  = request.form.get("client_name",  "").strip()
         client_phone = request.form.get("client_phone", "").strip()
 
@@ -425,6 +472,9 @@ def public_booking(business_id):
             return render_template("public_booking.html", business=business,
                                    current_count=current_count, max_clients=max_clients,
                                    queue_full=queue_full, error=message)
+
+        # ── PHASE 18: Log this booking for future cooldown checks ─
+        log_booking(business_id, today_str, client_ip, client_phone)
 
         emit_queue_update(business_id, today_queue["id"])
 
