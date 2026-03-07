@@ -3,3 +3,6 @@ __pycache__/
 venv/
 env/
 database/database.db
+.env
+.env.local
+.env.*
