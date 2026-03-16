@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 import os
 from flask import Flask, render_template
 from flask_limiter import Limiter
@@ -38,7 +41,6 @@ def run_migrations():
     database_url = os.environ.get("DATABASE_URL")
 
     if database_url:
-        # PRODUCTION: PostgreSQL (Neon)
         import psycopg2
         conn = psycopg2.connect(database_url)
         cursor = conn.cursor()
@@ -116,7 +118,6 @@ def run_migrations():
         print("✅ PostgreSQL database ready")
 
     else:
-        # LOCAL: SQLite
         import sqlite3
         db_path = os.environ.get("DATABASE_PATH", "database/database.db")
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
