@@ -98,19 +98,7 @@ def register():
 
                 verify_link = f"{BASE_URL}/verify/{token}"
 
-                sent = send_email(
-                    subject="Verify your RendezVousDZ account",
-                    recipient=email,
-                    body_html=f"""
-                        <h2>Welcome to RendezVousDZ!</h2>
-                        <p>Click the link below to verify your email address:</p>
-                        <p><a href="{verify_link}">{verify_link}</a></p>
-                        <p>This link is valid for 24 hours.</p>
-                    """
-                )
-
-                if not sent:
-                    print(f"VERIFY LINK (fallback): {verify_link}")
+                print(f"[DEV] Account created for {email} (verification disabled)")
 
                 return render_template("register.html", success=True)
 
