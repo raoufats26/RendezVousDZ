@@ -79,7 +79,7 @@ def register():
                 db.close()
             else:
                 _execute(db,
-                    "INSERT INTO users (email, password_hash, verified) VALUES (?, ?, 0)",
+                    "INSERT INTO users (email, password_hash, verified) VALUES (?, ?, 1)",
                     (email, generate_password_hash(password))
                 )
                 db.commit()
