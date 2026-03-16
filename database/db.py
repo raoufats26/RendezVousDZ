@@ -2,7 +2,8 @@ import sqlite3
 from datetime import date, datetime
 import re
 
-DB_NAME = "database/database.db"
+import os
+DB_NAME = os.environ.get("DATABASE_PATH", "database/database.db")
 
 def get_db():
     conn = sqlite3.connect(DB_NAME)

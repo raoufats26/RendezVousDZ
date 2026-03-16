@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: rendezvousdz
+    env: python
+    buildCommand: "pip install -r requirements.txt && python database/init_db.py && python database/migration_add_completed_at.py && python database/migration_add_language.py"
+    startCommand: "gunicorn --worker-class eventlet -w 1 app:app"
+    disk:
+      name: db
+      mountPath: /data
+      sizeGB: 1
