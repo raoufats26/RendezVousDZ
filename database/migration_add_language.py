@@ -5,7 +5,8 @@ Run once: python migration_add_language.py
 """
 import sqlite3
 
-DB_NAME = "database/database.db"
+import os
+DB_NAME = os.environ.get("DATABASE_PATH", "database/database.db")
 
 def migrate():
     conn = sqlite3.connect(DB_NAME)

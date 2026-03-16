@@ -7,7 +7,8 @@ Safe: Adds nullable column, does not affect existing data
 import sqlite3
 from datetime import datetime
 
-DB_NAME = "database/database.db"
+import os
+DB_NAME = os.environ.get("DATABASE_PATH", "database/database.db")
 
 def migrate():
     """Add completed_at column to queue_entries table"""
