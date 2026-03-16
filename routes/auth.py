@@ -1,3 +1,4 @@
+import os
 import re
 import secrets
 import hashlib
@@ -9,10 +10,12 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_mail import Message
 
-from database.db import get_db
+from database.db import get_db, _execute, USE_POSTGRES
 
 auth_bp = Blueprint("auth", __name__)
 limiter = Limiter(get_remote_address, app=current_app)
+
+BASE_URL = os.environ.get("BASE_URL", "http://127.0.0.1:5000")
 
 # ---------------------------
 # HELPERS
@@ -25,14 +28,9 @@ def password_strong(password):
     return len(password) >= 8
 
 def hash_token(token):
-    """SHA-256 hash a token before storing it in DB."""
     return hashlib.sha256(token.encode()).hexdigest()
 
 def send_email(subject, recipient, body_html):
-    """
-    Send an email using Flask-Mail.
-    mail must be initialized in app.py and passed via current_app extensions.
-    """
     try:
         mail = current_app.extensions['mail']
         msg = Message(
@@ -46,6 +44,13 @@ def send_email(subject, recipient, body_html):
     except Exception as e:
         print(f"[EMAIL ERROR] {e}")
         return False
+
+def row_to_dict(row):
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return row
+    return dict(row)
 
 # ---------------------------
 # REGISTER
@@ -67,30 +72,31 @@ def register():
         else:
             db = get_db()
 
-            existing = db.execute(
-                "SELECT id FROM users WHERE email=?", (email,)
-            ).fetchone()
+            existing = _execute(db, "SELECT id FROM users WHERE email=?", (email,)).fetchone()
 
             if existing:
                 error = "Email already registered"
+                db.close()
             else:
-                db.execute(
+                _execute(db,
                     "INSERT INTO users (email, password_hash, verified) VALUES (?, ?, 0)",
                     (email, generate_password_hash(password))
                 )
-                user_id = db.execute(
-                    "SELECT id FROM users WHERE email=?", (email,)
-                ).fetchone()["id"]
+                db.commit()
+
+                user_row = _execute(db, "SELECT id FROM users WHERE email=?", (email,)).fetchone()
+                user_id = user_row["id"] if isinstance(user_row, dict) else user_row[0]
 
                 token = secrets.token_urlsafe(32)
 
-                db.execute(
+                _execute(db,
                     "INSERT INTO email_tokens (user_id, token) VALUES (?, ?)",
                     (user_id, token)
                 )
                 db.commit()
+                db.close()
 
-                verify_link = f"http://127.0.0.1:5000/verify/{token}"
+                verify_link = f"{BASE_URL}/verify/{token}"
 
                 sent = send_email(
                     subject="Verify your RendezVousDZ account",
@@ -125,9 +131,8 @@ def login():
         password = request.form["password"]
 
         db = get_db()
-        user = db.execute(
-            "SELECT * FROM users WHERE email=?", (email,)
-        ).fetchone()
+        user = row_to_dict(_execute(db, "SELECT * FROM users WHERE email=?", (email,)).fetchone())
+        db.close()
 
         if not user:
             error = "Invalid credentials"
@@ -161,16 +166,16 @@ def logout():
 def verify_email(token):
     db = get_db()
 
-    row = db.execute(
-        "SELECT user_id FROM email_tokens WHERE token=?", (token,)
-    ).fetchone()
+    row = row_to_dict(_execute(db, "SELECT user_id FROM email_tokens WHERE token=?", (token,)).fetchone())
 
     if not row:
+        db.close()
         return "Invalid or expired token"
 
-    db.execute("UPDATE users SET verified=1 WHERE id=?", (row["user_id"],))
-    db.execute("DELETE FROM email_tokens WHERE token=?", (token,))
+    _execute(db, "UPDATE users SET verified=1 WHERE id=?", (row["user_id"],))
+    _execute(db, "DELETE FROM email_tokens WHERE token=?", (token,))
     db.commit()
+    db.close()
 
     return redirect("/login")
 
@@ -187,29 +192,26 @@ def forgot_password():
 
         if valid_email(email):
             db = get_db()
-            user = db.execute(
-                "SELECT id FROM users WHERE email=?", (email,)
-            ).fetchone()
+            user = row_to_dict(_execute(db, "SELECT id FROM users WHERE email=?", (email,)).fetchone())
 
             if user:
-                # Clean up any existing tokens for this user
-                db.execute(
+                _execute(db,
                     "DELETE FROM password_reset_tokens WHERE user_id=?",
                     (user["id"],)
                 )
 
-                # Generate secure token
                 raw_token = secrets.token_urlsafe(32)
                 token_hash = hash_token(raw_token)
                 expires_at = (datetime.utcnow() + timedelta(hours=1)).isoformat()
 
-                db.execute(
+                _execute(db,
                     "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)",
                     (user["id"], token_hash, expires_at)
                 )
                 db.commit()
+                db.close()
 
-                reset_link = f"http://127.0.0.1:5000/reset-password/{raw_token}"
+                reset_link = f"{BASE_URL}/reset-password/{raw_token}"
 
                 sent = send_email(
                     subject="Reset your RendezVousDZ password",
@@ -225,8 +227,9 @@ def forgot_password():
 
                 if not sent:
                     print(f"RESET LINK (fallback): {reset_link}")
+            else:
+                db.close()
 
-        # Always show generic message — no user enumeration
         return render_template("forgot_password.html", success=True)
 
     return render_template("forgot_password.html")
@@ -241,20 +244,25 @@ def reset_password(token):
     token_hash = hash_token(token)
     db = get_db()
 
-    row = db.execute(
+    row = row_to_dict(_execute(db,
         "SELECT * FROM password_reset_tokens WHERE token_hash=?",
         (token_hash,)
-    ).fetchone()
+    ).fetchone())
 
-    # Token not found
     if not row:
+        db.close()
         return render_template("reset_password.html", error="Invalid or expired reset link.")
 
-    # Check expiry
-    expires_at = datetime.fromisoformat(row["expires_at"])
+    expires_at = row["expires_at"]
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    else:
+        expires_at = expires_at.replace(tzinfo=None)
+
     if datetime.utcnow() > expires_at:
-        db.execute("DELETE FROM password_reset_tokens WHERE token_hash=?", (token_hash,))
+        _execute(db, "DELETE FROM password_reset_tokens WHERE token_hash=?", (token_hash,))
         db.commit()
+        db.close()
         return render_template("reset_password.html", error="This reset link has expired. Please request a new one.")
 
     if request.method == "POST":
@@ -262,21 +270,22 @@ def reset_password(token):
         confirm_password = request.form.get("confirm_password", "")
 
         if not password_strong(new_password):
+            db.close()
             return render_template("reset_password.html", token=token, error="Password must be at least 8 characters.")
 
         if new_password != confirm_password:
+            db.close()
             return render_template("reset_password.html", token=token, error="Passwords do not match.")
 
-        # Update password
-        db.execute(
+        _execute(db,
             "UPDATE users SET password_hash=? WHERE id=?",
             (generate_password_hash(new_password), row["user_id"])
         )
-
-        # Invalidate token
-        db.execute("DELETE FROM password_reset_tokens WHERE token_hash=?", (token_hash,))
+        _execute(db, "DELETE FROM password_reset_tokens WHERE token_hash=?", (token_hash,))
         db.commit()
+        db.close()
 
         return render_template("reset_password.html", success=True)
 
+    db.close()
     return render_template("reset_password.html", token=token)
