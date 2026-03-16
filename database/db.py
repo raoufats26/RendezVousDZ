@@ -1,192 +1,206 @@
-import sqlite3
-from datetime import date, datetime
-import re
-
 import os
+import re
+from datetime import date, datetime
+
+DATABASE_URL = os.environ.get("DATABASE_URL")  # Set on Render for production
+USE_POSTGRES = bool(DATABASE_URL)
+
+# SQLite fallback for local dev
 DB_NAME = os.environ.get("DATABASE_PATH", "database/database.db")
 
+
 def get_db():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if USE_POSTGRES:
+        import psycopg2
+        import psycopg2.extras
+        conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+        conn.autocommit = False
+        return conn
+    else:
+        import sqlite3
+        conn = sqlite3.connect(DB_NAME)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+
+def _placeholder(n=1):
+    """Return the right placeholder: %s for postgres, ? for sqlite."""
+    if USE_POSTGRES:
+        return ','.join(['%s'] * n) if n > 1 else '%s'
+    return ','.join(['?'] * n) if n > 1 else '?'
+
+
+def _ph(count=1):
+    """Shorthand for _placeholder."""
+    return _placeholder(count)
+
+
+def _execute(conn, sql, params=()):
+    """
+    Execute a query handling both sqlite3 and psycopg2 connections.
+    For psycopg2, replaces ? with %s in SQL.
+    Returns the cursor.
+    """
+    if USE_POSTGRES:
+        sql = sql.replace('?', '%s')
+        # Replace SQLite date functions with PostgreSQL equivalents
+        sql = sql.replace("date('now')", "CURRENT_DATE")
+        sql = sql.replace("date('now', '-6 days')", "(CURRENT_DATE - INTERVAL '6 days')")
+        sql = sql.replace("date('now', '-27 days')", "(CURRENT_DATE - INTERVAL '27 days')")
+        sql = sql.replace("date('now', '-29 days')", "(CURRENT_DATE - INTERVAL '29 days')")
+        sql = sql.replace("strftime('%W', dq.date)", "TO_CHAR(dq.date::date, 'IW')")
+        sql = sql.replace("strftime('%w', dq.date)", "EXTRACT(DOW FROM dq.date::date)::TEXT")
+        sql = sql.replace("strftime('%H', qe.created_at)", "EXTRACT(HOUR FROM qe.created_at)::INTEGER::TEXT")
+        sql = sql.replace("strftime('%s', 'now')", "EXTRACT(EPOCH FROM NOW())::INTEGER")
+        sql = sql.replace("strftime('%s', created_at)", "EXTRACT(EPOCH FROM created_at)::INTEGER")
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        return cursor
+    else:
+        return conn.execute(sql, params)
+
 
 def get_business_by_user(user_id):
     """Get business for a specific user"""
     conn = get_db()
-    business = conn.execute(
-        "SELECT * FROM businesses WHERE user_id = ?",
-        (user_id,)
-    ).fetchone()
+    row = _execute(conn, "SELECT * FROM businesses WHERE user_id = ?", (user_id,)).fetchone()
+    if USE_POSTGRES:
+        conn.close()
+        return dict(row) if row else None
     conn.close()
-    return business
+    return row
+
 
 def get_business_by_id(business_id):
     """Get business by ID (for public booking page)"""
     conn = get_db()
-    business = conn.execute(
-        "SELECT * FROM businesses WHERE id = ?",
-        (business_id,)
-    ).fetchone()
+    row = _execute(conn, "SELECT * FROM businesses WHERE id = ?", (business_id,)).fetchone()
+    if USE_POSTGRES:
+        conn.close()
+        return dict(row) if row else None
     conn.close()
-    return business
+    return row
+
 
 def create_business(user_id, name, category, city, max_clients):
     """Create a new business for a user"""
     conn = get_db()
-    conn.execute(
+    _execute(conn,
         "INSERT INTO businesses (user_id, name, category, city, max_clients_per_day) VALUES (?, ?, ?, ?, ?)",
         (user_id, name, category, city, max_clients)
     )
     conn.commit()
     conn.close()
 
+
 def update_business(business_id, name, category, city, max_clients):
-    """
-    Update business settings.
-    Does NOT affect existing queue entries.
-    New max_clients applies to future queues only.
-    """
     conn = get_db()
-    conn.execute(
+    _execute(conn,
         "UPDATE businesses SET name = ?, category = ?, city = ?, max_clients_per_day = ? WHERE id = ?",
         (name, category, city, max_clients, business_id)
     )
     conn.commit()
     conn.close()
 
+
 def get_today_queue(business_id):
-    """Get today's queue for a business. Returns None if doesn't exist."""
-    today = date.today().isoformat()  # YYYY-MM-DD format
+    today = date.today().isoformat()
     conn = get_db()
-    queue = conn.execute(
+    row = _execute(conn,
         "SELECT * FROM daily_queues WHERE business_id = ? AND date = ?",
         (business_id, today)
     ).fetchone()
+    if USE_POSTGRES:
+        conn.close()
+        return dict(row) if row else None
     conn.close()
-    return queue
+    return row
+
 
 def create_today_queue(business_id):
-    """Create today's queue for a business. Safe - won't duplicate."""
-    today = date.today().isoformat()  # YYYY-MM-DD format
+    today = date.today().isoformat()
     conn = get_db()
-
     try:
-        conn.execute(
+        _execute(conn,
             "INSERT INTO daily_queues (business_id, date) VALUES (?, ?)",
             (business_id, today)
         )
         conn.commit()
-    except sqlite3.IntegrityError:
-        # Queue already exists for this business/date - this is safe
-        pass
-
+    except Exception:
+        if USE_POSTGRES:
+            conn.rollback()
     conn.close()
+
 
 def count_entries_for_queue(daily_queue_id):
-    """Count total entries in a specific daily queue"""
     conn = get_db()
-    count = conn.execute(
+    row = _execute(conn,
         "SELECT COUNT(*) as count FROM queue_entries WHERE daily_queue_id = ?",
         (daily_queue_id,)
-    ).fetchone()["count"]
+    ).fetchone()
     conn.close()
-    return count
+    return row["count"] if row else 0
+
 
 def is_queue_full(daily_queue_id, max_clients):
-    """Check if queue has reached its daily limit"""
-    current_count = count_entries_for_queue(daily_queue_id)
-    return current_count >= max_clients
+    return count_entries_for_queue(daily_queue_id) >= max_clients
+
 
 def check_duplicate_phone(daily_queue_id, client_phone):
-    """
-    Check if phone number already exists in today's queue.
-    Returns True if duplicate found, False otherwise.
-    """
     if not client_phone or not client_phone.strip():
         return False
-
     conn = get_db()
-    existing = conn.execute(
+    row = _execute(conn,
         "SELECT id FROM queue_entries WHERE daily_queue_id = ? AND client_phone = ?",
         (daily_queue_id, client_phone.strip())
     ).fetchone()
     conn.close()
+    return row is not None
 
-    return existing is not None
 
 def validate_client_name(name):
-    """
-    Validate client name.
-    Returns (is_valid, error_message)
-    """
     if not name or not name.strip():
         return False, "Name is required"
-
     name = name.strip()
-
     if len(name) < 2:
         return False, "Name must be at least 2 characters"
-
     if len(name) > 100:
         return False, "Name is too long (maximum 100 characters)"
-
-    # Check if name contains at least one letter
     if not any(c.isalpha() for c in name):
         return False, "Name must contain at least one letter"
-
     return True, None
+
 
 def validate_phone_number(phone):
-    """
-    Validate phone number (basic Algerian format).
-    Returns (is_valid, error_message)
-    """
     if not phone or not phone.strip():
         return False, "Phone number is required"
-
     phone = phone.strip()
-
-    # Remove common separators for validation
     phone_digits = re.sub(r'[\s\-\(\)]', '', phone)
-
-    # Check if contains only digits (and optional + at start)
     if not re.match(r'^\+?\d+$', phone_digits):
         return False, "Phone number can only contain digits"
-
-    # Remove + for length check
     phone_digits = phone_digits.lstrip('+')
-
-    # Algerian numbers are typically 10 digits (05xxxxxxxx) or 9 digits
     if len(phone_digits) < 9:
         return False, "Phone number is too short"
-
     if len(phone_digits) > 15:
         return False, "Phone number is too long"
-
     return True, None
 
-def add_queue_entry(daily_queue_id, client_name, client_phone=None):
-    """Add a client to the queue. Returns success boolean and message."""
 
-    # Validate name
+def add_queue_entry(daily_queue_id, client_name, client_phone=None):
     name_valid, name_error = validate_client_name(client_name)
     if not name_valid:
         return False, name_error
 
-    # Validate phone if provided
     if client_phone:
         phone_valid, phone_error = validate_phone_number(client_phone)
         if not phone_valid:
             return False, phone_error
-
-        # Check for duplicate phone number
         if check_duplicate_phone(daily_queue_id, client_phone):
             return False, "This phone number is already in today's queue"
 
     conn = get_db()
-
     try:
-        conn.execute(
+        _execute(conn,
             "INSERT INTO queue_entries (daily_queue_id, client_name, client_phone, status) VALUES (?, ?, ?, 'waiting')",
             (daily_queue_id, client_name.strip(), client_phone.strip() if client_phone else None)
         )
@@ -194,18 +208,23 @@ def add_queue_entry(daily_queue_id, client_name, client_phone=None):
         conn.close()
         return True, "Client added to queue"
     except Exception as e:
+        if USE_POSTGRES:
+            conn.rollback()
         conn.close()
         return False, f"Error adding to queue: {str(e)}"
 
+
 def get_queue_entries(daily_queue_id):
-    """Get all entries for a specific daily queue"""
     conn = get_db()
-    entries = conn.execute(
+    rows = _execute(conn,
         "SELECT * FROM queue_entries WHERE daily_queue_id = ? ORDER BY created_at ASC",
         (daily_queue_id,)
     ).fetchall()
+    if USE_POSTGRES:
+        conn.close()
+        return [dict(r) for r in rows]
     conn.close()
-    return entries
+    return rows
 
 
 # ============================================================
@@ -213,28 +232,8 @@ def get_queue_entries(daily_queue_id):
 # ============================================================
 
 def get_average_service_time(business_id, sample_size=20):
-    """
-    Calculate average service time in minutes.
-
-    METHOD: Use the gap between consecutive completed_at timestamps
-    within the same daily queue, ordered by completion time.
-    This measures how long it takes to serve one person after the
-    previous one was done — which is the true "service duration".
-
-    Fallback: if not enough data, return 15 min default.
-
-    Args:
-        business_id: The business ID
-        sample_size: Number of recent completed entries to pull (default 20)
-
-    Returns:
-        Average service time in minutes (integer), minimum 1.
-    """
     conn = get_db()
-
-    # Fetch recent completed entries grouped by queue, ordered by completion time.
-    # We need at least 2 completions in the same queue to compute a gap.
-    completed_entries = conn.execute("""
+    completed_entries = _execute(conn, """
         SELECT
             qe.completed_at,
             dq.id AS queue_id
@@ -246,13 +245,14 @@ def get_average_service_time(business_id, sample_size=20):
         ORDER BY dq.id ASC, qe.completed_at ASC
         LIMIT ?
     """, (business_id, sample_size)).fetchall()
-
     conn.close()
 
-    if len(completed_entries) < 2:
-        return 15  # Default: 15 minutes
+    if USE_POSTGRES:
+        completed_entries = [dict(r) for r in completed_entries]
 
-    # Group by queue_id, then compute consecutive gaps within each queue
+    if len(completed_entries) < 2:
+        return 15
+
     from collections import defaultdict
     by_queue = defaultdict(list)
     for row in completed_entries:
@@ -264,55 +264,26 @@ def get_average_service_time(business_id, sample_size=20):
             continue
         for i in range(1, len(timestamps)):
             try:
-                t_prev = datetime.fromisoformat(timestamps[i - 1])
-                t_curr = datetime.fromisoformat(timestamps[i])
+                t_prev = timestamps[i - 1]
+                t_curr = timestamps[i]
+                if isinstance(t_prev, str):
+                    t_prev = datetime.fromisoformat(t_prev)
+                if isinstance(t_curr, str):
+                    t_curr = datetime.fromisoformat(t_curr)
                 gap_minutes = (t_curr - t_prev).total_seconds() / 60.0
-
-                # Sanity check: service gap must be between 1 min and 2 hours
                 if 1.0 <= gap_minutes <= 120.0:
                     gaps.append(gap_minutes)
             except Exception:
                 continue
 
     if not gaps:
-        conn2 = get_db()
-        fallback_rows = conn2.execute("""
-            SELECT qe.created_at, qe.completed_at
-            FROM queue_entries qe
-            JOIN daily_queues dq ON qe.daily_queue_id = dq.id
-            WHERE dq.business_id = ?
-              AND qe.status = 'completed'
-              AND qe.completed_at IS NOT NULL
-            ORDER BY qe.completed_at DESC
-            LIMIT ?
-        """, (business_id, sample_size)).fetchall()
-        conn2.close()
-
-        durations = []
-        for row in fallback_rows:
-            try:
-                created   = datetime.fromisoformat(row['created_at'])
-                completed = datetime.fromisoformat(row['completed_at'])
-                dur = (completed - created).total_seconds() / 60.0
-                if 1.0 <= dur <= 45.0:
-                    durations.append(dur)
-            except Exception:
-                continue
-
-        if not durations:
-            return 15
-
-        avg = sum(durations) / len(durations)
-        return max(1, int(round(avg)))
+        return 15
 
     avg_gap = sum(gaps) / len(gaps)
     return max(1, int(round(avg_gap)))
 
 
 def estimate_wait_time(daily_queue_id, position, business_id):
-    """
-    Estimate wait time for a client at a given position in the queue.
-    """
     avg_service_time = get_average_service_time(business_id)
     people_ahead = position - 1
     if people_ahead <= 0:
@@ -321,13 +292,10 @@ def estimate_wait_time(daily_queue_id, position, business_id):
 
 
 def mark_entry_completed(entry_id):
-    """
-    Mark a queue entry as completed and record completion timestamp.
-    """
     conn = get_db()
     try:
         current_time = datetime.now().isoformat()
-        conn.execute("""
+        _execute(conn, """
             UPDATE queue_entries
             SET status = 'completed', completed_at = ?
             WHERE id = ?
@@ -336,18 +304,16 @@ def mark_entry_completed(entry_id):
         conn.close()
         return True
     except Exception as e:
+        if USE_POSTGRES:
+            conn.rollback()
         conn.close()
         print(f"Error marking entry as completed: {e}")
         return False
 
 
 def get_queue_position(daily_queue_id, entry_id):
-    """
-    Get the position of a specific entry in the queue (1-based).
-    Only counts 'waiting' entries.
-    """
     conn = get_db()
-    waiting_entries = conn.execute("""
+    waiting_entries = _execute(conn, """
         SELECT id
         FROM queue_entries
         WHERE daily_queue_id = ? AND status = 'waiting'
@@ -358,7 +324,6 @@ def get_queue_position(daily_queue_id, entry_id):
     for index, entry in enumerate(waiting_entries):
         if entry['id'] == entry_id:
             return index + 1
-
     return None
 
 
@@ -366,59 +331,42 @@ def get_queue_position(daily_queue_id, entry_id):
 # PHASE 18: ANTI-SPAM & SMART PROTECTION
 # ============================================================
 
-# Config — tweak these to adjust protection aggressiveness
-BOOKING_COOLDOWN_MINUTES = 30   # same IP can't book again within this window
-NOSHOW_TIMEOUT_MINUTES   = 45   # waiting entries older than this get auto-cancelled
+BOOKING_COOLDOWN_MINUTES = 30
+NOSHOW_TIMEOUT_MINUTES   = 45
 
 
 def log_booking(business_id, queue_date, client_ip, client_phone):
-    """
-    Record a new public booking in booking_log.
-    Used to enforce IP cooldown and detect abuse patterns.
-    """
     conn = get_db()
     try:
-        conn.execute(
-            """INSERT INTO booking_log (business_id, queue_date, client_ip, client_phone)
-               VALUES (?, ?, ?, ?)""",
+        _execute(conn,
+            "INSERT INTO booking_log (business_id, queue_date, client_ip, client_phone) VALUES (?, ?, ?, ?)",
             (business_id, queue_date, client_ip, client_phone)
         )
         conn.commit()
     except Exception as e:
         print(f"[booking_log] Warning: could not log booking — {e}")
+        if USE_POSTGRES:
+            conn.rollback()
     finally:
         conn.close()
 
 
 def check_ip_cooldown(business_id, queue_date, client_ip, cooldown_minutes=None):
-    """
-    Returns (blocked: bool, minutes_remaining: int).
-    Blocks the same IP from booking the same business more than once
-    within BOOKING_COOLDOWN_MINUTES on the same day.
-
-    Owners adding walk-in clients via the dashboard bypass this —
-    it only applies to the public /b/<id> route.
-    """
     if not client_ip:
         return False, 0
 
     minutes = cooldown_minutes if cooldown_minutes is not None else BOOKING_COOLDOWN_MINUTES
-
     conn = get_db()
     try:
-        row = conn.execute(
-            """
+        row = _execute(conn, """
             SELECT booked_at FROM booking_log
             WHERE business_id = ?
               AND queue_date   = ?
               AND client_ip    = ?
             ORDER BY booked_at DESC
             LIMIT 1
-            """,
-            (business_id, queue_date, client_ip)
-        ).fetchone()
+        """, (business_id, queue_date, client_ip)).fetchone()
     except Exception:
-        # booking_log table missing — migration not yet run, allow booking
         conn.close()
         return False, 0
     finally:
@@ -428,8 +376,10 @@ def check_ip_cooldown(business_id, queue_date, client_ip, cooldown_minutes=None)
         return False, 0
 
     try:
-        last_booked = datetime.fromisoformat(row["booked_at"])
-        elapsed     = (datetime.utcnow() - last_booked).total_seconds() / 60.0
+        last_booked = row["booked_at"]
+        if isinstance(last_booked, str):
+            last_booked = datetime.fromisoformat(last_booked)
+        elapsed = (datetime.utcnow() - last_booked.replace(tzinfo=None)).total_seconds() / 60.0
         if elapsed < minutes:
             remaining = int(minutes - elapsed) + 1
             return True, remaining
@@ -440,67 +390,55 @@ def check_ip_cooldown(business_id, queue_date, client_ip, cooldown_minutes=None)
 
 
 def cancel_noshow_entries(business_id, timeout_minutes=None):
-    """
-    Auto-cancel (mark as 'skipped') waiting entries that have been
-    waiting longer than NOSHOW_TIMEOUT_MINUTES without being served.
-
-    Returns the number of entries cancelled.
-
-    Call this at the start of the public_booking GET request so the
-    queue is always cleaned up when someone visits the page.
-    """
     minutes = timeout_minutes if timeout_minutes is not None else NOSHOW_TIMEOUT_MINUTES
-
     conn = get_db()
     try:
-        # Find waiting entries older than timeout for this business
-        result = conn.execute(
-            """
-            UPDATE queue_entries
-            SET status = 'skipped'
-            WHERE status = 'waiting'
-              AND daily_queue_id IN (
-                  SELECT id FROM daily_queues
-                  WHERE business_id = ? AND date = date('now')
-              )
-              AND (
-                  -- created more than N minutes ago
-                  (strftime('%s', 'now') - strftime('%s', created_at)) / 60 > ?
-              )
-            """,
-            (business_id, minutes)
-        )
-        cancelled = result.rowcount
+        if USE_POSTGRES:
+            result = _execute(conn, """
+                UPDATE queue_entries
+                SET status = 'skipped'
+                WHERE status = 'waiting'
+                  AND daily_queue_id IN (
+                      SELECT id FROM daily_queues
+                      WHERE business_id = ? AND date = CURRENT_DATE
+                  )
+                  AND EXTRACT(EPOCH FROM (NOW() - created_at)) / 60 > ?
+            """, (business_id, minutes))
+            cancelled = result.rowcount
+        else:
+            result = _execute(conn, """
+                UPDATE queue_entries
+                SET status = 'skipped'
+                WHERE status = 'waiting'
+                  AND daily_queue_id IN (
+                      SELECT id FROM daily_queues
+                      WHERE business_id = ? AND date = date('now')
+                  )
+                  AND (strftime('%s', 'now') - strftime('%s', created_at)) / 60 > ?
+            """, (business_id, minutes))
+            cancelled = result.rowcount
         conn.commit()
         return cancelled
     except Exception as e:
         print(f"[cancel_noshow] Warning: {e}")
+        if USE_POSTGRES:
+            conn.rollback()
         return 0
     finally:
         conn.close()
 
 
 def check_daily_ip_limit(business_id, queue_date, client_ip, max_per_day=2):
-    """
-    Prevent the same IP from booking more than max_per_day slots per day
-    for the same business (handles households / shared IPs generously with 2).
-
-    Returns True if limit is exceeded, False otherwise.
-    """
     if not client_ip:
         return False
-
     conn = get_db()
     try:
-        row = conn.execute(
-            """
+        row = _execute(conn, """
             SELECT COUNT(*) as cnt FROM booking_log
             WHERE business_id = ?
               AND queue_date   = ?
               AND client_ip    = ?
-            """,
-            (business_id, queue_date, client_ip)
-        ).fetchone()
+        """, (business_id, queue_date, client_ip)).fetchone()
         return (row["cnt"] if row else 0) >= max_per_day
     except Exception:
         return False
